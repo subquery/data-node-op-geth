@@ -154,7 +154,7 @@ func BenchmarkCreateBloom(b *testing.B) {
 	})
 }
 
-type testingSigner struct { }
+type testingSigner struct{}
 
 func (s testingSigner) Sender(tx *Transaction) (common.Address, error) {
 	return common.HexToAddress("0x1"), nil

@@ -753,8 +753,6 @@ func DeleteTxBloom(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	}
 }
 
-
-
 // storedReceiptRLP is the storage encoding of a receipt.
 // Re-definition in core/types/receipt.go.
 // TODO: Re-use the existing definition.
