@@ -843,7 +843,7 @@ func TestLightFilterLogs(t *testing.T) {
 		b.AddTx(tx)
 	})
 	for i, block := range blocks {
-		rawdb.WriteBlock(db, block)
+		rawdb.WriteBlock(db, block, params.TestChainConfig)
 		rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
 		rawdb.WriteHeadBlockHash(db, block.Hash())
 		if i > 0 {

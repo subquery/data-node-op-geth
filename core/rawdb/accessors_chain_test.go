@@ -128,7 +128,7 @@ func TestBlockStorage(t *testing.T) {
 		t.Fatalf("Non existent body returned: %v", entry)
 	}
 	// Write and verify the block in the database
-	WriteBlock(db, block)
+	WriteBlock(db, block, params.TestChainConfig)
 	if entry := ReadBlock(db, block.Hash(), block.NumberU64()); entry == nil {
 		t.Fatalf("Stored block not found")
 	} else if entry.Hash() != block.Hash() {
@@ -473,7 +473,7 @@ func TestAncientStorage(t *testing.T) {
 	}
 
 	// Write and verify the header in the database
-	WriteAncientBlocks(db, []*types.Block{block}, []types.Receipts{nil}, big.NewInt(100))
+	WriteAncientBlocks(db, []*types.Block{block}, []types.Receipts{nil}, big.NewInt(100), params.TestChainConfig)
 
 	if blob := ReadHeaderRLP(db, hash, number); len(blob) == 0 {
 		t.Fatalf("no header returned")
@@ -609,7 +609,7 @@ func BenchmarkWriteAncientBlocks(b *testing.B) {
 
 		blocks := allBlocks[i : i+length]
 		receipts := batchReceipts[:length]
-		writeSize, err := WriteAncientBlocks(db, blocks, receipts, td)
+		writeSize, err := WriteAncientBlocks(db, blocks, receipts, td, params.TestChainConfig)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -955,11 +955,11 @@ func TestHeadersRLPStorage(t *testing.T) {
 	}
 	var receipts []types.Receipts = make([]types.Receipts, 100)
 	// Write first half to ancients
-	WriteAncientBlocks(db, chain[:50], receipts[:50], big.NewInt(100))
+	WriteAncientBlocks(db, chain[:50], receipts[:50], big.NewInt(100), params.TestChainConfig)
 	// Write second half to db
 	for i := 50; i < 100; i++ {
 		WriteCanonicalHash(db, chain[i].Hash(), chain[i].NumberU64())
-		WriteBlock(db, chain[i])
+		WriteBlock(db, chain[i], params.TestChainConfig)
 	}
 	checkSequence := func(from, amount int) {
 		headersRlp := ReadHeaderRange(db, uint64(from), uint64(amount))

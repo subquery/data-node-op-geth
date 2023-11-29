@@ -34,6 +34,9 @@ const (
 
 	// ChainFreezerDifficultyTable indicates the name of the freezer total difficulty table.
 	ChainFreezerDifficultyTable = "diffs"
+
+	// ChainFreezerTransactionBloomTable indicates the name of the freezer transactions bloom table.
+	ChainFreezerTransactionBloomTable = "transactions_bloom"
 )
 
 // chainFreezerNoSnappy configures whether compression is disabled for the ancient-tables.
@@ -44,6 +47,7 @@ var chainFreezerNoSnappy = map[string]bool{
 	ChainFreezerBodiesTable:     false,
 	ChainFreezerReceiptTable:    false,
 	ChainFreezerDifficultyTable: true,
+	ChainFreezerTransactionBloomTable: true,
 }
 
 const (

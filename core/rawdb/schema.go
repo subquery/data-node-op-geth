@@ -102,13 +102,16 @@ var (
 
 	blockBodyPrefix     = []byte("b") // blockBodyPrefix + num (uint64 big endian) + hash -> block body
 	blockReceiptsPrefix = []byte("r") // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
+	// "t" is already used by headerTDSuffix
+	blockTransactionBloomPrefix = []byte("tx") // blockTransactionBloomPrefix + num (uint64 big endian) + hash -> block transactions bloom
 
-	txLookupPrefix        = []byte("l") // txLookupPrefix + hash -> transaction/receipt lookup metadata
-	bloomBitsPrefix       = []byte("B") // bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash -> bloom bits
-	SnapshotAccountPrefix = []byte("a") // SnapshotAccountPrefix + account hash -> account trie value
-	SnapshotStoragePrefix = []byte("o") // SnapshotStoragePrefix + account hash + storage hash -> storage trie value
-	CodePrefix            = []byte("c") // CodePrefix + code hash -> account code
-	skeletonHeaderPrefix  = []byte("S") // skeletonHeaderPrefix + num (uint64 big endian) -> header
+	txLookupPrefix             = []byte("l") // txLookupPrefix + hash -> transaction/receipt lookup metadata
+	bloomBitsPrefix            = []byte("B") // bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash -> bloom bits
+	bloomBitsTransactionPrefix = []byte("T") // bloomBitsTransactionPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash -> bloom bits
+	SnapshotAccountPrefix      = []byte("a") // SnapshotAccountPrefix + account hash -> account trie value
+	SnapshotStoragePrefix      = []byte("o") // SnapshotStoragePrefix + account hash + storage hash -> storage trie value
+	CodePrefix                 = []byte("c") // CodePrefix + code hash -> account code
+	skeletonHeaderPrefix       = []byte("S") // skeletonHeaderPrefix + num (uint64 big endian) -> header
 
 	// Path-based storage scheme of merkle patricia trie.
 	trieNodeAccountPrefix = []byte("A") // trieNodeAccountPrefix + hexPath -> trie node
@@ -120,7 +123,8 @@ var (
 	genesisPrefix  = []byte("ethereum-genesis-") // genesis state prefix for the db
 
 	// BloomBitsIndexPrefix is the data table of a chain indexer to track its progress
-	BloomBitsIndexPrefix = []byte("iB")
+	BloomBitsIndexPrefix            = []byte("iB")
+	BloomBitsTransactionIndexPrefix = []byte("iT")
 
 	ChtPrefix           = []byte("chtRootV2-") // ChtPrefix + chtNum (uint64 big endian) -> trie root hash
 	ChtTablePrefix      = []byte("cht-")
@@ -186,6 +190,11 @@ func blockReceiptsKey(number uint64, hash common.Hash) []byte {
 	return append(append(blockReceiptsPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
 }
 
+// blockReceiptsKey = blockReceiptsPrefix + num (uint64 big endian) + hash
+func blockTransactionBloomKey(number uint64, hash common.Hash) []byte {
+	return append(append(blockTransactionBloomPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
+}
+
 // txLookupKey = txLookupPrefix + hash
 func txLookupKey(hash common.Hash) []byte {
 	return append(txLookupPrefix, hash.Bytes()...)
@@ -213,6 +222,16 @@ func storageSnapshotsKey(accountHash common.Hash) []byte {
 // bloomBitsKey = bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash
 func bloomBitsKey(bit uint, section uint64, hash common.Hash) []byte {
 	key := append(append(bloomBitsPrefix, make([]byte, 10)...), hash.Bytes()...)
+
+	binary.BigEndian.PutUint16(key[1:], uint16(bit))
+	binary.BigEndian.PutUint64(key[3:], section)
+
+	return key
+}
+
+// bloomBitsTransactionKey = BloomBitsTransactionIndexPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash
+func bloomBitsTransactionKey(bit uint, section uint64, hash common.Hash) []byte {
+	key := append(append(bloomBitsTransactionPrefix, make([]byte, 10)...), hash.Bytes()...)
 
 	binary.BigEndian.PutUint16(key[1:], uint16(bit))
 	binary.BigEndian.PutUint64(key[3:], section)
