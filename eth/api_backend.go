@@ -451,3 +451,8 @@ func (b *EthAPIBackend) HistoricalRPCService() *rpc.Client {
 func (b *EthAPIBackend) Genesis() *types.Block {
 	return b.eth.blockchain.Genesis()
 }
+
+func (b *EthAPIBackend) GetTxBloom(ctx context.Context, hash common.Hash) types.Bloom {
+	raw := b.eth.blockchain.GetTxBloom(hash)
+	return types.BytesToBloom(*raw)
+}

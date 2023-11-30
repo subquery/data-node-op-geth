@@ -229,6 +229,16 @@ func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 	return receipts
 }
 
+// GetTxBloom retrieves the Transactions Bloom for the given block
+// TODO this is a temporary function for development so there is no caching
+func (bc *BlockChain) GetTxBloom(hash common.Hash) *[]byte {
+	number := rawdb.ReadHeaderNumber(bc.db, hash)
+	if number == nil {
+		return nil
+	}
+	return rawdb.ReadTxBloom(bc.db, hash, *number)
+}
+
 // GetUnclesInChain retrieves all the uncles from a given block backwards until
 // a specific distance is reached.
 func (bc *BlockChain) GetUnclesInChain(block *types.Block, length int) []*types.Header {
