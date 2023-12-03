@@ -35,6 +35,7 @@ import (
 
 var (
 	errInvalidTopic      = errors.New("invalid topic(s)")
+	errInvalidSigHash    = errors.New("invalid sigHash(s)")
 	errFilterNotFound    = errors.New("filter not found")
 	errInvalidBlockRange = errors.New("invalid block range params")
 	errExceedMaxTopics   = errors.New("exceed max topics")
@@ -292,6 +293,7 @@ func (api *FilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc.Subsc
 // FilterCriteria represents a request to create a new filter.
 // Same as ethereum.FilterQuery but with UnmarshalJSON() method.
 type FilterCriteria ethereum.FilterQuery
+type TxFilterCriteria ethereum.TxFilterQuery
 
 // NewFilter creates a new filter and returns the filter id. It can be
 // used to retrieve logs when the state changes. This method cannot be
@@ -367,6 +369,36 @@ func (api *FilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*type
 		return nil, err
 	}
 	return returnLogs(logs), err
+}
+
+func (api *FilterAPI) GetTransactions(ctx context.Context, crit TxFilterCriteria) ([]*ethapi.RPCTransaction, error) {
+
+	var filter *TxFilter
+	if crit.BlockHash != nil {
+		// Block filter requested, construct a single-shot filter
+		filter = api.sys.NewTxBlockFilter(*crit.BlockHash, crit.FromAddresses, crit.ToAddresses, crit.SigHashes)
+	} else {
+		// Convert the RPC block numbers into internal representations
+		begin := rpc.LatestBlockNumber.Int64()
+		if crit.FromBlock != nil {
+			begin = crit.FromBlock.Int64()
+		}
+		end := rpc.LatestBlockNumber.Int64()
+		if crit.ToBlock != nil {
+			end = crit.ToBlock.Int64()
+		}
+		if begin > 0 && end > 0 && begin > end {
+			return nil, errInvalidBlockRange
+		}
+		// Construct the range filter
+		filter = api.sys.NewTxRangeFilter(begin, end, crit.FromAddresses, crit.ToAddresses, crit.SigHashes)
+	}
+	// Run the filter and return all the logs
+	txs, err := filter.Transactions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return returnTransactions(txs), err
 }
 
 // UninstallFilter removes the filter with the given filter id.
@@ -489,6 +521,15 @@ func returnLogs(logs []*types.Log) []*types.Log {
 	return logs
 }
 
+// returnTransactions is a helper that will return an empty log array in case the given logs array is nil,
+// otherwise the given logs array is returned.
+func returnTransactions(txs []*ethapi.RPCTransaction) []*ethapi.RPCTransaction {
+	if txs == nil {
+		return []*ethapi.RPCTransaction{}
+	}
+	return txs
+}
+
 // UnmarshalJSON sets *args fields with given data.
 func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 	type input struct {
@@ -585,6 +626,117 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 				}
 			default:
 				return errInvalidTopic
+			}
+		}
+	}
+
+	return nil
+}
+
+func (args *TxFilterCriteria) UnmarshalJSON(data []byte) error {
+	type input struct {
+		BlockHash   *common.Hash     `json:"blockHash"`
+		FromBlock   *rpc.BlockNumber `json:"fromBlock"`
+		ToBlock     *rpc.BlockNumber `json:"toBlock"`
+		FromAddress interface{}      `json:"fromAddress"`
+		ToAddress   interface{}      `json:"toAddress"`
+		SigHashes   []interface{}    `json:"sigHashes"`
+	}
+
+	var raw input
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	if raw.BlockHash != nil {
+		if raw.FromBlock != nil || raw.ToBlock != nil {
+			// BlockHash is mutually exclusive with FromBlock/ToBlock criteria
+			return errors.New("cannot specify both BlockHash and FromBlock/ToBlock, choose one or the other")
+		}
+		args.BlockHash = raw.BlockHash
+	} else {
+		if raw.FromBlock != nil {
+			args.FromBlock = big.NewInt(raw.FromBlock.Int64())
+		}
+
+		if raw.ToBlock != nil {
+			args.ToBlock = big.NewInt(raw.ToBlock.Int64())
+		}
+	}
+
+	args.FromAddresses = []common.Address{}
+
+	if raw.FromAddress != nil {
+		// raw.Address can contain a single address or an array of addresses
+		switch rawAddr := raw.FromAddress.(type) {
+		case []interface{}:
+			for i, addr := range rawAddr {
+				if strAddr, ok := addr.(string); ok {
+					addr, err := decodeAddress(strAddr)
+					if err != nil {
+						return fmt.Errorf("invalid fromAddress at index %d: %v", i, err)
+					}
+					args.FromAddresses = append(args.FromAddresses, addr)
+				} else {
+					return fmt.Errorf("non-string fromAddress at index %d", i)
+				}
+			}
+		case string:
+			addr, err := decodeAddress(rawAddr)
+			if err != nil {
+				return fmt.Errorf("invalid from address: %v", err)
+			}
+			args.FromAddresses = []common.Address{addr}
+		default:
+			return errors.New("invalid from addresses in query")
+		}
+	}
+
+	args.ToAddresses = []common.Address{}
+
+	if raw.ToAddress != nil {
+		// raw.Address can contain a single address or an array of addresses
+		switch rawAddr := raw.ToAddress.(type) {
+		case []interface{}:
+			for i, addr := range rawAddr {
+				if strAddr, ok := addr.(string); ok {
+					addr, err := decodeAddress(strAddr)
+					if err != nil {
+						return fmt.Errorf("invalid toAddress at index %d: %v", i, err)
+					}
+					args.ToAddresses = append(args.ToAddresses, addr)
+				} else {
+					return fmt.Errorf("non-string toAddress at index %d", i)
+				}
+			}
+		case string:
+			addr, err := decodeAddress(rawAddr)
+			if err != nil {
+				return fmt.Errorf("invalid to address: %v", err)
+			}
+			args.ToAddresses = []common.Address{addr}
+		default:
+			return errors.New("invalid to addresses in query")
+		}
+	}
+
+	// data is an array consisting of strings.
+	// JSON null values are converted to common.Hash{} and ignored by the filter manager.
+	if len(raw.SigHashes) > 0 {
+		args.SigHashes = make([][]byte, len(raw.SigHashes))
+		for i, t := range raw.SigHashes {
+			switch data := t.(type) {
+			case nil:
+				// ignore topic when matching logs
+
+			case string:
+				bytes := common.Hex2Bytes(data)
+				if len(bytes) != 4 {
+					return errInvalidSigHash
+				}
+				args.SigHashes[i] = bytes
+			default:
+				return errInvalidSigHash
 			}
 		}
 	}

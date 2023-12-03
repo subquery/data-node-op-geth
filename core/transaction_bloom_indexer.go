@@ -24,13 +24,13 @@ type TransactionBloomIndexer struct {
 // NewTransactionBloomIndexer returns a chain indexer that generates bloom bits data for the
 // canonical chain for transactions filtering.
 func NewTransactionBloomIndexer(db ethdb.Database, size, confirms uint64) *ChainIndexer {
-	backend := &BloomIndexer{
+	backend := &TransactionBloomIndexer{
 		db:   db,
 		size: size,
 	}
 	table := rawdb.NewTable(db, string(rawdb.BloomBitsTransactionIndexPrefix))
 
-	return NewChainIndexer(db, table, backend, size, confirms, bloomThrottling, "transactions bloombits")
+	return NewChainIndexer(db, table, backend, size, confirms, bloomThrottling, "transactionBloombits")
 }
 
 // Reset implements core.ChainIndexerBackend, starting a new bloombits index

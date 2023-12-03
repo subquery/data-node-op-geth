@@ -729,7 +729,6 @@ func ReadTxBloom(db ethdb.Reader, hash common.Hash, number uint64) *[]byte {
 
 // WriteTxBloom stores the total difficulty of a block into the database.
 func WriteTxBloom(db ethdb.KeyValueWriter, hash common.Hash, number uint64, bloom *[]byte) {
-	log.Info("Writing TX bloom to store", "bloom", common.Bytes2Hex(*bloom))
 	data, err := rlp.EncodeToBytes(bloom)
 	if err != nil {
 		log.Crit("Failed to RLP encode block transaction bloom", "err", err)

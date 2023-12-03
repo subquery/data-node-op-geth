@@ -122,38 +122,12 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 		return f.pendingLogs(), nil
 	}
 
-	resolveSpecial := func(number int64) (int64, error) {
-		var hdr *types.Header
-		switch number {
-		case rpc.LatestBlockNumber.Int64(), rpc.PendingBlockNumber.Int64():
-			// we should return head here since we've already captured
-			// that we need to get the pending logs in the pending boolean above
-			hdr, _ = f.sys.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
-			if hdr == nil {
-				return 0, errors.New("latest header not found")
-			}
-		case rpc.FinalizedBlockNumber.Int64():
-			hdr, _ = f.sys.backend.HeaderByNumber(ctx, rpc.FinalizedBlockNumber)
-			if hdr == nil {
-				return 0, errors.New("finalized header not found")
-			}
-		case rpc.SafeBlockNumber.Int64():
-			hdr, _ = f.sys.backend.HeaderByNumber(ctx, rpc.SafeBlockNumber)
-			if hdr == nil {
-				return 0, errors.New("safe header not found")
-			}
-		default:
-			return number, nil
-		}
-		return hdr.Number.Int64(), nil
-	}
-
 	var err error
 	// range query need to resolve the special begin/end block number
-	if f.begin, err = resolveSpecial(f.begin); err != nil {
+	if f.begin, err = resolveSpecial(f.sys, ctx, f.begin); err != nil {
 		return nil, err
 	}
-	if f.end, err = resolveSpecial(f.end); err != nil {
+	if f.end, err = resolveSpecial(f.sys, ctx, f.end); err != nil {
 		return nil, err
 	}
 
@@ -419,4 +393,30 @@ func bloomFilter(bloom types.Bloom, addresses []common.Address, topics [][]commo
 		}
 	}
 	return true
+}
+
+func resolveSpecial(sys *FilterSystem, ctx context.Context, number int64) (int64, error) {
+	var hdr *types.Header
+	switch number {
+	case rpc.LatestBlockNumber.Int64(), rpc.PendingBlockNumber.Int64():
+		// we should return head here since we've already captured
+		// that we need to get the pending logs in the pending boolean above
+		hdr, _ = sys.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
+		if hdr == nil {
+			return 0, errors.New("latest header not found")
+		}
+	case rpc.FinalizedBlockNumber.Int64():
+		hdr, _ = sys.backend.HeaderByNumber(ctx, rpc.FinalizedBlockNumber)
+		if hdr == nil {
+			return 0, errors.New("finalized header not found")
+		}
+	case rpc.SafeBlockNumber.Int64():
+		hdr, _ = sys.backend.HeaderByNumber(ctx, rpc.SafeBlockNumber)
+		if hdr == nil {
+			return 0, errors.New("safe header not found")
+		}
+	default:
+		return number, nil
+	}
+	return hdr.Number.Int64(), nil
 }

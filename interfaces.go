@@ -173,6 +173,18 @@ type FilterQuery struct {
 	Topics [][]common.Hash
 }
 
+// TcFilterQuery contains options for transaction filtering.
+type TxFilterQuery struct {
+	BlockHash *common.Hash // used by eth_getLogs, return logs only from block with this hash
+	FromBlock *big.Int     // beginning of the queried range, nil means genesis block
+	ToBlock   *big.Int     // end of the range, nil means latest block
+
+	FromAddresses []common.Address // restricts matches to transactions created by specific contracts
+	ToAddresses   []common.Address // restricts matches to transactions to specific addresses or contracts
+
+	SigHashes [][]byte // restricts matches to transactions with specific sig hashes
+}
+
 // LogFilterer provides access to contract log events using a one-off query or continuous
 // event subscription.
 //

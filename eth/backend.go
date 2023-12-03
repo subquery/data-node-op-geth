@@ -92,7 +92,8 @@ type Ethereum struct {
 	bloomIndexer      *core.ChainIndexer             // Bloom indexer operating during block imports
 	closeBloomHandler chan struct{}
 
-	bloomTransactionsIndexer *core.ChainIndexer // Bloom indexer operating during block imports for transactions bloom
+	bloomTransactionRequests chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests for transactions
+	bloomTransactionsIndexer *core.ChainIndexer             // Bloom indexer operating during block imports for transactions bloom
 
 	APIBackend *EthAPIBackend
 
@@ -178,6 +179,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		etherbase:                config.Miner.Etherbase,
 		bloomRequests:            make(chan chan *bloombits.Retrieval),
 		bloomIndexer:             core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
+		bloomTransactionRequests: make(chan chan *bloombits.Retrieval),
 		bloomTransactionsIndexer: core.NewTransactionBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
 		p2pServer:                stack.Server(),
 		shutdownTracker:          shutdowncheck.NewShutdownTracker(chainDb),

@@ -420,6 +420,17 @@ func (b *EthAPIBackend) ServiceFilter(ctx context.Context, session *bloombits.Ma
 	}
 }
 
+func (b *EthAPIBackend) TxBloomStatus() (uint64, uint64) {
+	sections, _, _ := b.eth.bloomTransactionsIndexer.Sections()
+	return params.BloomBitsBlocks, sections
+}
+
+func (b *EthAPIBackend) TxServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {
+	for i := 0; i < bloomFilterThreads; i++ {
+		go session.Multiplex(bloomRetrievalBatch, bloomRetrievalWait, b.eth.bloomTransactionRequests)
+	}
+}
+
 func (b *EthAPIBackend) Engine() consensus.Engine {
 	return b.eth.engine
 }
