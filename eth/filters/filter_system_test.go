@@ -125,6 +125,10 @@ func (b *testBackend) GetLogs(ctx context.Context, hash common.Hash, number uint
 	return logs, nil
 }
 
+func (b* testBackend) GetTxBloom(ctx context.Context, hash common.Hash) types.Bloom {
+	return types.BytesToBloom(make([]byte, 6))
+}
+
 func (b *testBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
 	return b.pendingBlock, b.pendingReceipts
 }
@@ -150,6 +154,10 @@ func (b *testBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subsc
 }
 
 func (b *testBackend) BloomStatus() (uint64, uint64) {
+	return params.BloomBitsBlocks, b.sections
+}
+
+func (b *testBackend) TxBloomStatus() (uint64, uint64) {
 	return params.BloomBitsBlocks, b.sections
 }
 
