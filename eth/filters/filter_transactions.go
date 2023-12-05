@@ -65,7 +65,7 @@ func (sys *FilterSystem) NewTxRangeFilter(begin, end int64, fromAddresses, toAdd
 func (sys *FilterSystem) NewTxBlockFilter(block common.Hash, fromAddresses, toAddresses []common.Address, sigHashes [][]byte) *TxFilter {
 	filter := newTxFilter(sys, fromAddresses, toAddresses, sigHashes)
 	filter.block = &block
-	return filter;
+	return filter
 }
 
 func newTxFilter(sys *FilterSystem, fromAddresses, toAddresses []common.Address, sigHashes [][]byte) *TxFilter {
@@ -143,7 +143,7 @@ func (f *TxFilter) Transactions(ctx context.Context) ([]*ethapi.RPCTransaction, 
 // it creates and returns two channels: one for delivering transaction data, and one for reporting errors.
 func (f *TxFilter) rangeTransactionsAsync(ctx context.Context) (chan *ethapi.RPCTransaction, chan error) {
 	var (
-		txChan = make(chan *ethapi.RPCTransaction)
+		txChan  = make(chan *ethapi.RPCTransaction)
 		errChan = make(chan error)
 	)
 
@@ -302,7 +302,7 @@ func (f *TxFilter) checkMatches(ctx context.Context, header *types.Header) ([]*e
 	// rpcTxs := make([]ethapi.RPCTransaction, len(body.Transactions))
 	var rpcTxs []*ethapi.RPCTransaction
 	for i, tx := range body.Transactions {
-		rpcTx :=ethapi.NewRPCTransaction(tx, header, uint64(i), f.sys.backend.ChainConfig())
+		rpcTx := ethapi.NewRPCTransaction(tx, header, uint64(i), f.sys.backend.ChainConfig())
 		rpcTxs = append(rpcTxs, &rpcTx)
 	}
 
@@ -317,25 +317,30 @@ func (f *TxFilter) checkMatches(ctx context.Context, header *types.Header) ([]*e
 // filterTransactions creates a slice of logs matching the given criteria.
 func filterTransactionsRPC(txs []*ethapi.RPCTransaction, fromBlock, toBlock *big.Int, fromAddresses, toAddresses []common.Address, sigHashes [][]byte) []*ethapi.RPCTransaction {
 	var check = func(tx *ethapi.RPCTransaction) bool {
-		// TODO need block height of tx
 		if fromBlock != nil && fromBlock.Int64() >= 0 && fromBlock.Uint64() > tx.BlockNumber.ToInt().Uint64() {
-			return false;
+			return false
 		}
 		if toBlock != nil && toBlock.Int64() >= 0 && toBlock.Uint64() < tx.BlockNumber.ToInt().Uint64() {
-			return false;
+			return false
 		}
 
 		if len(fromAddresses) > 0 && !includes(fromAddresses, tx.From) {
 			return false
 		}
 
-		if len(toAddresses) > 0 && !includes(toAddresses, *tx.To) {
+		// To can be nil for contract creation
+		if len(toAddresses) > 0 && (tx.To == nil || !includes(toAddresses, *tx.To)) {
 			return false
 		}
 
 		if sigHashes != nil && len(sigHashes) > 0 {
 			var included bool
 			for _, sigHash := range sigHashes {
+				// Handle non-contract call
+				if (tx.Input == nil || len(tx.Input) == 0) && (sigHash == nil || len(sigHash) == 0) {
+					included = true
+					break
+				}
 				if bytes.HasPrefix(tx.Input, sigHash) {
 					included = true
 					break
@@ -377,7 +382,11 @@ func bloomTxFilter(bloom types.Bloom, addresses []common.Address, sigHashes [][]
 	if len(sigHashes) > 0 {
 		var included bool
 		for _, sigHash := range sigHashes {
-			// TODO handle empty sighash
+			// TODO should this be allowed it could impact performance
+			if sigHash == nil || len(sigHash) == 0 {
+				included = true
+				break
+			}
 			if bloom.Test(sigHash) {
 				included = true
 				break

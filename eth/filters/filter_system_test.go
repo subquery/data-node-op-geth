@@ -125,8 +125,13 @@ func (b *testBackend) GetLogs(ctx context.Context, hash common.Hash, number uint
 	return logs, nil
 }
 
-func (b* testBackend) GetTxBloom(ctx context.Context, hash common.Hash) types.Bloom {
-	return types.BytesToBloom(make([]byte, 6))
+func (b *testBackend) GetTxBloom(ctx context.Context, hash common.Hash) types.Bloom {
+	number := rawdb.ReadHeaderNumber(b.db, hash)
+	if number == nil {
+		return types.BytesToBloom(make([]byte, 6))
+	}
+	bytes := rawdb.ReadTxBloom(b.db, hash, *number)
+	return types.BytesToBloom(*bytes)
 }
 
 func (b *testBackend) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
