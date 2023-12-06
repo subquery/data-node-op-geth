@@ -45,12 +45,9 @@ func (b *TransactionBloomIndexer) Reset(ctx context.Context, section uint64, las
 // the index.
 func (b *TransactionBloomIndexer) Process(ctx context.Context, header *types.Header) error {
 	// Get the bloom value from the db
-	bloom, err := rawdb.ReadBlockTransactionBloom(b.db, header.Number.Uint64(), header.Hash())
-	if err != nil {
-		return err
-	}
+	bloom := rawdb.ReadTxBloom(b.db, header.Hash(), header.Number.Uint64())
 	// Add the bloom value to the bloombits
-	b.gen.AddBloom(uint(header.Number.Uint64()-b.section*b.size), types.BytesToBloom(bloom))
+	b.gen.AddBloom(uint(header.Number.Uint64()-b.section*b.size), types.BytesToBloom(*bloom))
 	b.head = header.Hash()
 	return nil
 }

@@ -180,11 +180,6 @@ func DeleteBloombits(db ethdb.Database, bit uint, from uint64, to uint64) {
 	}
 }
 
-// ReadBlockTransactionBloom retrieves the bloom filter beloning to the given block from the database.
-func ReadBlockTransactionBloom(db ethdb.Reader, number uint64, hash common.Hash) ([]byte, error) {
-	return db.Get(blockTransactionBloomKey(number, hash))
-}
-
 // ReadTransactionBloomBits retrieves the compressed bloom bit vector belonging to the given
 // section and bit index from the.
 func ReadTransactionBloomBits(db ethdb.KeyValueReader, bit uint, section uint64, head common.Hash) ([]byte, error) {
