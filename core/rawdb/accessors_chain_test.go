@@ -420,6 +420,50 @@ func TestBlockReceiptStorage(t *testing.T) {
 	}
 }
 
+func TestTxBloomStorage(t *testing.T) {
+	db := NewMemoryDatabase()
+
+	hash, number := common.HexToHash("0x01"), uint64(1)
+
+	key, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	signer := types.LatestSignerForChainID(big.NewInt(8))
+
+	// Create transactions.
+	txs := make([]*types.Transaction, 5)
+	for i := 0; i < len(txs); i++ {
+		var err error
+		to := common.Address{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}
+		txs[i], err = types.SignNewTx(key, signer, &types.LegacyTx{
+			Nonce:    2,
+			GasPrice: big.NewInt(30000),
+			Gas:      0x45454545,
+			To:       &to,
+		})
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	want, err := types.TransactionsBloom(txs, signer)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+
+	WriteTxBloom(db, hash, number, &want)
+	have := ReadTxBloom(db, hash, number)
+
+	if !bytes.Equal(want, *have) {
+		t.Fatalf("Bloom values don't match want: %v, have: %v", want, *have)
+	}
+
+	DeleteTxBloom(db, hash, number)
+	if txb := ReadTxBloom(db, hash, number); txb != nil {
+		t.Fatalf("deleted tx bloom returned: %v", txb)
+	}
+
+	// TODO test tx bloom removed when block removed
+}
+
 func checkReceiptsRLP(have, want types.Receipts) error {
 	if len(have) != len(want) {
 		return fmt.Errorf("receipts sizes mismatch: have %d, want %d", len(have), len(want))
