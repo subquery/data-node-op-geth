@@ -50,6 +50,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
+	"github.com/ethereum/go-ethereum/eth/subql"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/remotedb"
@@ -2076,6 +2077,14 @@ func RegisterFilterAPI(stack *node.Node, backend ethapi.Backend, ethcfg *ethconf
 		Service:   filters.NewFilterAPI(filterSystem, isLightClient),
 	}})
 	return filterSystem
+}
+
+// ResiterSubqlAPI adds the subql specific RPC API to the node
+func RegisterSubqlAPI(stack *node.Node, backend ethapi.Backend, filterSystem *filters.FilterSystem) {
+	stack.RegisterAPIs([]rpc.API{{
+		Namespace: "subql",
+		Service:   subql.NewSubqlApi(filterSystem, backend),
+	}})
 }
 
 // RegisterFullSyncTester adds the full-sync tester service into node.
