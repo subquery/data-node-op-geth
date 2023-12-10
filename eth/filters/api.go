@@ -561,33 +561,11 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 		}
 	}
 
-	args.Addresses = []common.Address{}
-
-	if raw.Addresses != nil {
-		// raw.Address can contain a single address or an array of addresses
-		switch rawAddr := raw.Addresses.(type) {
-		case []interface{}:
-			for i, addr := range rawAddr {
-				if strAddr, ok := addr.(string); ok {
-					addr, err := decodeAddress(strAddr)
-					if err != nil {
-						return fmt.Errorf("invalid address at index %d: %v", i, err)
-					}
-					args.Addresses = append(args.Addresses, addr)
-				} else {
-					return fmt.Errorf("non-string address at index %d", i)
-				}
-			}
-		case string:
-			addr, err := decodeAddress(rawAddr)
-			if err != nil {
-				return fmt.Errorf("invalid address: %v", err)
-			}
-			args.Addresses = []common.Address{addr}
-		default:
-			return errors.New("invalid addresses in query")
-		}
+	addresses, err := decodeAddresses(raw.Addresses)
+	if err != nil {
+		return err
 	}
+	args.Addresses = addresses
 
 	// topics is an array consisting of strings and/or arrays of strings.
 	// JSON null values are converted to common.Hash{} and ignored by the filter manager.
@@ -664,81 +642,27 @@ func (args *TxFilterCriteria) UnmarshalJSON(data []byte) error {
 		}
 	}
 
-	args.FromAddresses = []common.Address{}
-
-	if raw.FromAddress != nil {
-		// raw.Address can contain a single address or an array of addresses
-		switch rawAddr := raw.FromAddress.(type) {
-		case []interface{}:
-			for i, addr := range rawAddr {
-				if strAddr, ok := addr.(string); ok {
-					addr, err := decodeAddress(strAddr)
-					if err != nil {
-						return fmt.Errorf("invalid fromAddress at index %d: %v", i, err)
-					}
-					args.FromAddresses = append(args.FromAddresses, addr)
-				} else {
-					return fmt.Errorf("non-string fromAddress at index %d", i)
-				}
-			}
-		case string:
-			addr, err := decodeAddress(rawAddr)
-			if err != nil {
-				return fmt.Errorf("invalid from address: %v", err)
-			}
-			args.FromAddresses = []common.Address{addr}
-		default:
-			return errors.New("invalid from addresses in query")
-		}
+	fromAddress, err := decodeAddresses(raw.FromAddress)
+	if err != nil {
+		return err
 	}
+	args.FromAddresses = fromAddress
 
-	args.ToAddresses = []common.Address{}
-
-	if raw.ToAddress != nil {
-		// raw.Address can contain a single address or an array of addresses
-		switch rawAddr := raw.ToAddress.(type) {
-		case []interface{}:
-			for i, addr := range rawAddr {
-				if strAddr, ok := addr.(string); ok {
-					addr, err := decodeAddress(strAddr)
-					if err != nil {
-						return fmt.Errorf("invalid toAddress at index %d: %v", i, err)
-					}
-					args.ToAddresses = append(args.ToAddresses, addr)
-				} else {
-					return fmt.Errorf("non-string toAddress at index %d", i)
-				}
-			}
-		case string:
-			addr, err := decodeAddress(rawAddr)
-			if err != nil {
-				return fmt.Errorf("invalid to address: %v", err)
-			}
-			args.ToAddresses = []common.Address{addr}
-		default:
-			return errors.New("invalid to addresses in query")
-		}
+	toAddresses, err := decodeAddresses(raw.ToAddress)
+	if err != nil {
+		return err
 	}
+	args.ToAddresses = toAddresses
 
 	// data is an array consisting of strings.
 	// JSON null values are converted to common.Hash{} and ignored by the filter manager.
 	if len(raw.SigHashes) > 0 {
-		args.SigHashes = make([][]byte, len(raw.SigHashes))
-		for i, t := range raw.SigHashes {
-			switch data := t.(type) {
-			case nil:
-				// ignore topic when matching logs
 
-			case string:
-				bytes := common.Hex2Bytes(data)
-				if len(bytes) != 4 {
-					return errInvalidSigHash
-				}
-				args.SigHashes[i] = bytes
-			default:
-				return errInvalidSigHash
-			}
+		parsed, err := decodeSigHashes(raw.SigHashes)
+		if err != nil {
+			return err
 		}
+		args.SigHashes = parsed
 	}
 
 	return nil
@@ -758,4 +682,65 @@ func decodeTopic(s string) (common.Hash, error) {
 		err = fmt.Errorf("hex has invalid length %d after decoding; expected %d for topic", len(b), common.HashLength)
 	}
 	return common.BytesToHash(b), err
+}
+
+func decodeSigHash(s string) ([]byte, error) {
+	b, err := hexutil.Decode(s)
+	if err == nil && len(b) != 4 {
+		err = fmt.Errorf("hex has invalid length %d after decoding; expected %d for topic", len(b), 4)
+	}
+	return b, err
+}
+
+// decodeAddresses decodes an raw value which could contain a single address or an array of addresses into an array of addresses
+func decodeAddresses(input interface{}) ([]common.Address, error) {
+	addresses := []common.Address{}
+
+	if input != nil {
+		switch rawAddr := input.(type) {
+		case []interface{}:
+			for i, addr := range rawAddr {
+				if strAddr, ok := addr.(string); ok {
+					addr, err := decodeAddress(strAddr)
+					if err != nil {
+						return addresses, fmt.Errorf("invalid address at index %d: %v", i, err)
+					}
+					addresses = append(addresses, addr)
+				} else {
+					return addresses, fmt.Errorf("non-string address at index %d", i)
+				}
+			}
+		case string:
+			addr, err := decodeAddress(rawAddr)
+			if err != nil {
+				return addresses, fmt.Errorf("invalid address: %v", err)
+			}
+			addresses = []common.Address{addr}
+		default:
+			return addresses, errors.New("invalid from addresses in query")
+		}
+	}
+
+	return addresses, nil
+}
+
+func decodeSigHashes(input []interface{}) ([][]byte, error) {
+	output := [][]byte{}
+	for _, t := range input {
+		switch data := t.(type) {
+		case nil:
+			// ignore topic when matching logs
+
+		case string:
+			bytes, err := decodeSigHash(data)
+			if err != nil {
+				return nil, err
+			}
+			output = append(output, bytes)
+		default:
+			return nil, errInvalidSigHash
+		}
+	}
+
+	return output, nil
 }
