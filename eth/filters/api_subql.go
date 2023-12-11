@@ -95,7 +95,6 @@ func (api *SubqlAPI) FilterBlocksCapabilities(ctx context.Context) (*subqlD.Capa
 }
 
 func (api *SubqlAPI) FilterBlocks(ctx context.Context, blockFilter BlockFilter) (*BlockResult, error) {
-
 	err := api.getGenesisHeader(ctx)
 	if err != nil {
 		return nil, err
@@ -103,7 +102,6 @@ func (api *SubqlAPI) FilterBlocks(ctx context.Context, blockFilter BlockFilter) 
 
 	result := &BlockResult{
 		GenesisHash: api.genesisHeader.Hash().Hex(),
-		BlockRange:  [2]uint64{0, 0}, // TODO actual range
 	}
 
 	var logResults []*types.Log
@@ -134,6 +132,12 @@ func (api *SubqlAPI) FilterBlocks(ctx context.Context, blockFilter BlockFilter) 
 		return nil, err
 	}
 
+	// TODO Is this the right range? Its the range of results be we could have searched further
+	result.BlockRange = [2]uint64{
+		result.Blocks[0].Header.Number.ToInt().Uint64(),
+		result.Blocks[len(result.Blocks)-1].Header.Number.ToInt().Uint64(),
+	}
+
 	log.Info("NUM RESULTS", "txs", len(txResults), "logs", len(logResults), "blocks", len(result.Blocks))
 
 	// TODO implement limit
@@ -141,6 +145,7 @@ func (api *SubqlAPI) FilterBlocks(ctx context.Context, blockFilter BlockFilter) 
 	return result, nil
 }
 
+// buildBlocks assembles the filtered logs/transactions into the correct Block structure
 func (api *SubqlAPI) buildBlocks(ctx context.Context, txs []*ethapi.RPCTransaction, logs []*types.Log) ([]*Block, error) {
 	grouped := map[uint64]*Block{}
 
@@ -192,11 +197,11 @@ func (api *SubqlAPI) buildBlocks(ctx context.Context, txs []*ethapi.RPCTransacti
 
 func (api *SubqlAPI) getGenesisHeader(ctx context.Context) error {
 	if api.genesisHeader == nil {
-		genesisBlock, err := api.backend.BlockByNumber(ctx, rpc.EarliestBlockNumber)
+		header, err := api.backend.HeaderByNumber(ctx, rpc.EarliestBlockNumber)
 		if err != nil {
 			return err
 		}
-		api.genesisHeader = genesisBlock.Header()
+		api.genesisHeader = header
 	}
 
 	return nil
@@ -247,7 +252,7 @@ func (args *BlockFilter) UnmarshalJSON(data []byte) error {
 				return err
 			}
 
-			topics, err := decodeTopics(logFilter)
+			topics, err := decodeFilterTopics(logFilter)
 			if err != nil {
 				return err
 			}
@@ -256,7 +261,7 @@ func (args *BlockFilter) UnmarshalJSON(data []byte) error {
 				FromBlock: args.FromBlock,
 				ToBlock:   args.ToBlock,
 				Addresses: addresses,
-				Topics:    [][]common.Hash{topics},
+				Topics:    topics,
 			}
 
 			args.Logs = append(args.Logs, filterQuery)
@@ -297,26 +302,8 @@ func (args *BlockFilter) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func decodeTopics(f FieldFilter) ([]common.Hash, error) {
-	rawTopics := []interface{}{f["topic0"], f["topic1"], f["topic2"], f["topic3"]}
-	result := make([]common.Hash, 4)
+func decodeFilterTopics(f FieldFilter) ([][]common.Hash, error) {
+	rawTopics := []interface{}{f["topics0"], f["topics1"], f["topics2"], f["topics3"]}
 
-	for i, t := range rawTopics {
-		switch topic := t.(type) {
-		case nil:
-			// nothing
-		case string:
-			parsed, err := decodeTopic(topic)
-			if err != nil {
-				return nil, err
-			}
-			result[i] = parsed
-		case common.Hash:
-			result[i] = topic
-		default:
-			return nil, errInvalidTopic
-		}
-	}
-
-	return result, nil
+	return decodeTopics(rawTopics)
 }

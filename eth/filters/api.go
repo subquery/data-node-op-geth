@@ -567,46 +567,11 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 	}
 	args.Addresses = addresses
 
-	// topics is an array consisting of strings and/or arrays of strings.
-	// JSON null values are converted to common.Hash{} and ignored by the filter manager.
-	if len(raw.Topics) > 0 {
-		args.Topics = make([][]common.Hash, len(raw.Topics))
-		for i, t := range raw.Topics {
-			switch topic := t.(type) {
-			case nil:
-				// ignore topic when matching logs
-
-			case string:
-				// match specific topic
-				top, err := decodeTopic(topic)
-				if err != nil {
-					return err
-				}
-				args.Topics[i] = []common.Hash{top}
-
-			case []interface{}:
-				// or case e.g. [null, "topic0", "topic1"]
-				for _, rawTopic := range topic {
-					if rawTopic == nil {
-						// null component, match all
-						args.Topics[i] = nil
-						break
-					}
-					if topic, ok := rawTopic.(string); ok {
-						parsed, err := decodeTopic(topic)
-						if err != nil {
-							return err
-						}
-						args.Topics[i] = append(args.Topics[i], parsed)
-					} else {
-						return errInvalidTopic
-					}
-				}
-			default:
-				return errInvalidTopic
-			}
-		}
+	topics, err := decodeTopics(raw.Topics)
+	if err != nil {
+		return err
 	}
+	args.Topics = topics
 
 	return nil
 }
@@ -722,6 +687,54 @@ func decodeAddresses(input interface{}) ([]common.Address, error) {
 	}
 
 	return addresses, nil
+}
+
+// topics is an array consisting of strings and/or arrays of strings.
+// JSON null values are converted to common.Hash{} and ignored by the filter manager.
+func decodeTopics(input []interface{}) ([][]common.Hash, error) {
+	if input == nil || len(input) == 0 {
+		return nil, nil
+	}
+
+	result := make([][]common.Hash, len(input))
+
+	for i, t := range input {
+		switch topic := t.(type) {
+		case nil:
+			// ignore topic when matching logs
+
+		case string:
+			// match specific topic
+			top, err := decodeTopic(topic)
+			if err != nil {
+				return nil, err
+			}
+			result[i] = []common.Hash{top}
+
+		case []interface{}:
+			// or case e.g. [null, "topic0", "topic1"]
+			for _, rawTopic := range topic {
+				if rawTopic == nil {
+					// null component, match all
+					result[i] = nil
+					break
+				}
+				if topic, ok := rawTopic.(string); ok {
+					parsed, err := decodeTopic(topic)
+					if err != nil {
+						return nil, err
+					}
+					result[i] = append(result[i], parsed)
+				} else {
+					return nil, errInvalidTopic
+				}
+			}
+		default:
+			return nil, errInvalidTopic
+		}
+	}
+
+	return result, nil
 }
 
 func decodeSigHashes(input []interface{}) ([][]byte, error) {

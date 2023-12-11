@@ -208,7 +208,7 @@ func (f *TxFilter) indexedTransactions(ctx context.Context, end uint64, txChan c
 			}
 			f.begin = int64(number) + 1
 
-			// Retrieve the suggested block and pull any truly matching logs
+			// Retrieve the suggested block and pull any truly matching transactions
 			header, err := f.sys.backend.HeaderByNumber(ctx, rpc.BlockNumber(number))
 			if header == nil || err != nil {
 				return err
