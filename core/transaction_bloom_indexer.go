@@ -9,6 +9,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // BloomIndexer implements a core.ChainIndexer, building up a rotated bloom bits index
@@ -19,14 +21,16 @@ type TransactionBloomIndexer struct {
 	gen     *bloombits.Generator // generator to rotate the bloom bits crating the bloom index
 	section uint64               // Section is the section number being processed currently
 	head    common.Hash          // Head is the hash of the last header processed
+	config *params.ChainConfig
 }
 
 // NewTransactionBloomIndexer returns a chain indexer that generates bloom bits data for the
 // canonical chain for transactions filtering.
-func NewTransactionBloomIndexer(db ethdb.Database, size, confirms uint64) *ChainIndexer {
+func NewTransactionBloomIndexer(db ethdb.Database, chainConfig *params.ChainConfig, size, confirms uint64) *ChainIndexer {
 	backend := &TransactionBloomIndexer{
 		db:   db,
 		size: size,
+		config: chainConfig,
 	}
 	table := rawdb.NewTable(db, string(rawdb.BloomBitsTransactionIndexPrefix))
 
@@ -45,9 +49,9 @@ func (b *TransactionBloomIndexer) Reset(ctx context.Context, section uint64, las
 // the index.
 func (b *TransactionBloomIndexer) Process(ctx context.Context, header *types.Header) error {
 	// Get the bloom value from the db
-	bloom := rawdb.ReadTxBloom(b.db, header.Hash(), header.Number.Uint64())
+	bloom := b.getOrCreateTxBloom(header)
 	// Add the bloom value to the bloombits
-	b.gen.AddBloom(uint(header.Number.Uint64()-b.section*b.size), types.BytesToBloom(*bloom))
+	b.gen.AddBloom(uint(header.Number.Uint64()-b.section*b.size), bloom)
 	b.head = header.Hash()
 	return nil
 }
@@ -69,4 +73,16 @@ func (b *TransactionBloomIndexer) Commit() error {
 // Prune returns an empty error since we don't support pruning here.
 func (b *TransactionBloomIndexer) Prune(threshold uint64) error {
 	return nil
+}
+
+// getOrCreateTxBloom fetches the transactions bloom for the block, if it doesn't exist it will create the transaction bloom and save it
+func (b* TransactionBloomIndexer) getOrCreateTxBloom(header *types.Header) types.Bloom {
+	bloom := rawdb.ReadTxBloom(b.db, header.Hash(), header.Number.Uint64())
+
+	if bloom == nil {
+		block := rawdb.ReadBlock(b.db, header.Hash(), header.Number.Uint64())
+		bloom = rawdb.WriteTxBloomByBlock(b.db, block, b.config)
+	}
+
+	return types.BytesToBloom(*bloom)
 }

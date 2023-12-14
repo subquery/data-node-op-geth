@@ -180,7 +180,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		bloomRequests:            make(chan chan *bloombits.Retrieval),
 		bloomIndexer:             core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
 		bloomTransactionRequests: make(chan chan *bloombits.Retrieval),
-		bloomTransactionsIndexer: core.NewTransactionBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
+		bloomTransactionsIndexer: core.NewTransactionBloomIndexer(chainDb, chainConfig, params.BloomBitsBlocks, params.BloomConfirms),
 		p2pServer:                stack.Server(),
 		shutdownTracker:          shutdowncheck.NewShutdownTracker(chainDb),
 		nodeCloser:               stack.Close,

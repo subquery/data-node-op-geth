@@ -738,12 +738,13 @@ func WriteTxBloom(db ethdb.KeyValueWriter, hash common.Hash, number uint64, bloo
 	}
 }
 
-func WriteTxBloomByBlock(db ethdb.KeyValueWriter, block *types.Block, config *params.ChainConfig) {
+func WriteTxBloomByBlock(db ethdb.KeyValueWriter, block *types.Block, config *params.ChainConfig) *[]byte {
 	txBloom, err := types.TransactionsBloom(block.Body().Transactions, types.MakeSigner(config, block.Number(), block.Time()))
 	if err != nil {
 		log.Crit("Failed to create transactions bloom", "hash", block.Hash(), "number", block.NumberU64(), "err", err)
 	}
 	WriteTxBloom(db, block.Hash(), block.NumberU64(), &txBloom)
+	return &txBloom
 }
 
 // DeleteTd removes all block total difficulty data associated with a hash.
