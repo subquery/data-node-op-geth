@@ -3,6 +3,7 @@ package filters
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"math/big"
 
 	subqlD "bitbucket.org/onfinalitydev/dict-takoyaki/subql"
@@ -76,17 +77,11 @@ func (api *SubqlAPI) FilterBlocksCapabilities(ctx context.Context) (*subqlD.Capa
 		return nil, err
 	}
 
-	// TODO need to use FinalizedBlockHeight, for test network "Finalized" doesn't work
-	endBlock, err := api.backend.BlockByNumber(ctx, rpc.LatestBlockNumber)
-	if err != nil {
-		return nil, err
-	}
-
 	res.AvailableBlocks = []struct {
 		StartHeight int `json:"startHeight"`
 		EndHeight   int `json:"endHeight"`
 	}{
-		{StartHeight: int(api.genesisHeader.Number.Uint64()), EndHeight: int(endBlock.NumberU64())},
+		{StartHeight: int(api.genesisHeader.Number.Uint64()), EndHeight: int(api.endHeight())},
 	}
 
 	res.GenesisHash = api.genesisHeader.Hash().Hex()
@@ -218,6 +213,13 @@ func (api *SubqlAPI) getHeader(ctx context.Context, blockNum rpc.BlockNumber) (*
 		ParentHash: fullHeader.ParentHash,
 		Number:     (*hexutil.Big)(fullHeader.Number),
 	}, nil
+}
+
+// endHeight gets the minimum indexed height of transactions and logs bloombits
+func (api *SubqlAPI) endHeight() uint64 {
+	sizeTx, sectionsTx := api.backend.TxBloomStatus()
+	sizeL, sectionsL := api.backend.BloomStatus()
+	return uint64(math.Min(float64(sizeTx * sectionsTx), float64(sizeL * sectionsL)))
 }
 
 type BlockFilter struct {
