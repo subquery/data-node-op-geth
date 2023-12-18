@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -21,15 +22,15 @@ type TxFilter struct {
 
 	// TODO filter transaction success
 
-	block      *common.Hash // Block hash if filtering a single block
-	begin, end int64        // Range interval if filtering multiple blocks
+	block             *common.Hash // Block hash if filtering a single block
+	begin, end, limit int64        // Range interval if filtering multiple blocks
 
 	matcher *bloombits.Matcher
 }
 
 // NewTxRangeFilter creates a new filter which uses a bloom filter on blocks to
 // figure out whether a particular block is interesting or not.
-func (sys *FilterSystem) NewTxRangeFilter(begin, end int64, fromAddresses, toAddresses []common.Address, sigHashes [][]byte) *TxFilter {
+func (sys *FilterSystem) NewTxRangeFilter(begin, end, limit int64, fromAddresses, toAddresses []common.Address, sigHashes [][]byte) *TxFilter {
 
 	var filters [][][]byte
 
@@ -56,6 +57,7 @@ func (sys *FilterSystem) NewTxRangeFilter(begin, end int64, fromAddresses, toAdd
 	filter.matcher = bloombits.NewMatcher(size, filters)
 	filter.begin = begin
 	filter.end = end
+	filter.limit = limit
 
 	return filter
 }
@@ -77,6 +79,7 @@ func newTxFilter(sys *FilterSystem, fromAddresses, toAddresses []common.Address,
 	}
 }
 
+// Transactions gets the matching transactions for the filter
 func (f *TxFilter) Transactions(ctx context.Context) ([]*ethapi.RPCTransaction, error) {
 	// If we're doing singleton block filtering, execute and return
 	if f.block != nil {
@@ -87,7 +90,8 @@ func (f *TxFilter) Transactions(ctx context.Context) ([]*ethapi.RPCTransaction, 
 		if header == nil {
 			return nil, errors.New("unknown block")
 		}
-		return f.blockTransactions(ctx, header)
+		txs, err := f.blockTransactions(ctx, header)
+		return txs, err
 	}
 
 	var (
@@ -114,12 +118,27 @@ func (f *TxFilter) Transactions(ctx context.Context) ([]*ethapi.RPCTransaction, 
 		return nil, err
 	}
 
-	txChan, errChan := f.rangeTransactionsAsync(ctx)
+	var limitChan = make(chan bool, 1)
+	defer close(limitChan)
+
+	txChan, errChan := f.rangeTransactionsAsync(ctx, limitChan)
 	var txs []*ethapi.RPCTransaction
+
+	var checkLimit = func() bool {
+		if f.limit != 0 && len(txs) >= int(f.limit) {
+			limitChan <- true
+			return true
+		}
+		return false
+	}
+
 	for {
 		select {
 		case tx := <-txChan:
 			txs = append(txs, tx)
+			if checkLimit() {
+				return txs, nil
+			}
 		case err := <-errChan:
 			if err != nil {
 				// if an error occurs during extraction, we do return the extracted data
@@ -133,6 +152,9 @@ func (f *TxFilter) Transactions(ctx context.Context) ([]*ethapi.RPCTransaction, 
 					return txs, err
 				}
 				txs = append(txs, pendingTxs...)
+				if checkLimit() {
+					return txs, nil
+				}
 			}
 			return txs, nil
 		}
@@ -141,7 +163,7 @@ func (f *TxFilter) Transactions(ctx context.Context) ([]*ethapi.RPCTransaction, 
 
 // rangeTransactionsAsync retrieves block-range logs that match the filter criteria asynchronously,
 // it creates and returns two channels: one for delivering transaction data, and one for reporting errors.
-func (f *TxFilter) rangeTransactionsAsync(ctx context.Context) (chan *ethapi.RPCTransaction, chan error) {
+func (f *TxFilter) rangeTransactionsAsync(ctx context.Context, limitChan chan bool) (chan *ethapi.RPCTransaction, chan error) {
 	var (
 		txChan  = make(chan *ethapi.RPCTransaction)
 		errChan = make(chan error)
@@ -164,13 +186,13 @@ func (f *TxFilter) rangeTransactionsAsync(ctx context.Context) (chan *ethapi.RPC
 			if indexed > end {
 				indexed = end + 1
 			}
-			if err = f.indexedTransactions(ctx, indexed-1, txChan); err != nil {
+			if err = f.indexedTransactions(ctx, indexed-1, limitChan, txChan); err != nil {
 				errChan <- err
 				return
 			}
 		}
 
-		if err := f.unindexedTransactions(ctx, end, txChan); err != nil {
+		if err := f.unindexedTransactions(ctx, end, limitChan, txChan); err != nil {
 			errChan <- err
 			return
 		}
@@ -183,7 +205,7 @@ func (f *TxFilter) rangeTransactionsAsync(ctx context.Context) (chan *ethapi.RPC
 
 // indexedTransactions returns the transactions matching the filter criteria based on the bloom
 // bits indexed available locally or via the network.
-func (f *TxFilter) indexedTransactions(ctx context.Context, end uint64, txChan chan *ethapi.RPCTransaction) error {
+func (f *TxFilter) indexedTransactions(ctx context.Context, end uint64, limitChan chan bool, txChan chan *ethapi.RPCTransaction) error {
 	// Create a matcher session and request servicing from the backend
 	matches := make(chan uint64, 64)
 
@@ -220,7 +242,9 @@ func (f *TxFilter) indexedTransactions(ctx context.Context, end uint64, txChan c
 			for _, tx := range found {
 				txChan <- tx
 			}
-
+		case <-limitChan:
+			log.Info("Indexed chan received")
+			return nil
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -229,7 +253,7 @@ func (f *TxFilter) indexedTransactions(ctx context.Context, end uint64, txChan c
 
 // unindexedTransactions returns the transctions matching the filter criteria based on raw block
 // iteration and bloom matching.
-func (f *TxFilter) unindexedTransactions(ctx context.Context, end uint64, txChan chan *ethapi.RPCTransaction) error {
+func (f *TxFilter) unindexedTransactions(ctx context.Context, end uint64, limitChan chan bool, txChan chan *ethapi.RPCTransaction) error {
 	for ; f.begin <= int64(end); f.begin++ {
 		header, err := f.sys.backend.HeaderByNumber(ctx, rpc.BlockNumber(f.begin))
 		if header == nil || err != nil {
@@ -244,6 +268,9 @@ func (f *TxFilter) unindexedTransactions(ctx context.Context, end uint64, txChan
 			case txChan <- tx:
 			case <-ctx.Done():
 				return ctx.Err()
+			case <-limitChan:
+				log.Info("Unindexed chan received")
+				return nil
 			}
 		}
 	}

@@ -32,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
@@ -302,23 +301,27 @@ func TestTxFilters(t *testing.T) {
 			want: `[{"blockHash":"0x7a7556792ca7d37882882e2b001fe14833eaf81c2c7f865c9c771ec37a024f6b","blockNumber":"0x3","from":"0x71562b71999873db5b286df957af199ec94617f7","gas":"0x7530","gasPrice":"0x280a0d96","hash":"0xdefe471992a07a02acdfbe33edaae22fbb86d7d3cec3f1b8e4e77702fb3acc1d","input":"0x78b9a1f30000000000000000000000000000000000000000000000000000746f706963320000000000000000000000000000000000000000000000000000746f70696331","nonce":"0x2","to":"0xfe00000000000000000000000000000000000000","transactionIndex":"0x0","value":"0x0","type":"0x0","chainId":"0x1","v":"0x26","r":"0x8aadf3ab0e624f0a44d3a3f0b12d9b846162c0a84d06a898b81c9a81a749fccb","s":"0x1c0fe3b723da1d841448bb8ed05d3f889e2509282129159889a6e0f3729b64cc"}]`,
 		},
 		{
-			f:    sys.NewTxRangeFilter(0, int64(rpc.LatestBlockNumber), nil, []common.Address{contract}, [][]byte{common.Hex2Bytes("c670f864")}),
+			f:    sys.NewTxRangeFilter(0, int64(rpc.LatestBlockNumber), 0, nil, []common.Address{contract}, [][]byte{common.Hex2Bytes("c670f864")}),
 			want: `[{"blockHash":"0x24417bb49ce44cfad65da68f33b510bf2a129c0d89ccf06acb6958b8585ccf34","blockNumber":"0x2","from":"0x71562b71999873db5b286df957af199ec94617f7","gas":"0x7530","gasPrice":"0x2da282a8","hash":"0xa8028c655b6423204c8edfbc339f57b042d6bec2b6a61145d76b7c08b4cccd42","input":"0xc670f8640000000000000000000000000000000000000000000000000000746f70696331","nonce":"0x0","to":"0xfe00000000000000000000000000000000000000","transactionIndex":"0x0","value":"0x0","type":"0x0","chainId":"0x1","v":"0x25","r":"0xacd139f95e249a1d60fdb392ba0fa34a4fdc4f062203dc17f35f8e56f29d64d2","s":"0xcd785e8cdee241f414578e569da6ec152f432abeed61a7016dddffffa00c1c7"},{"blockHash":"0xb166569ffd2b8f9865e6333dfaada62d5027749c381ff568493b24d594f711ab","blockNumber":"0x3e8","from":"0x71562b71999873db5b286df957af199ec94617f7","gas":"0x7530","gasPrice":"0x7","hash":"0xa919b50798f7ab32f2066b47e63d6225d69cbb9acbc7f3a4935f7c75919f78fc","input":"0xc670f8640000000000000000000000000000000000000000000000000000746f70696334","nonce":"0x6","to":"0xfe00000000000000000000000000000000000000","transactionIndex":"0x0","value":"0x0","type":"0x0","chainId":"0x1","v":"0x25","r":"0x2cc28a31219ceb5149bc5c7660d26943ac0d4e0aae7d08d5fc03d272928b08b0","s":"0x5a065f094e9143f6a1ba11cfe781ae3e979b9dc172c069f6edde4c3ad58162bc"}]`,
 		},
 		{
-			f: sys.NewTxRangeFilter(900, 999, nil, []common.Address{contract}, [][]byte{common.Hex2Bytes("2a4c0896")}),
+			f: sys.NewTxRangeFilter(900, 999, 0, nil, []common.Address{contract}, [][]byte{common.Hex2Bytes("2a4c0896")}),
 		},
 		{
-			f:    sys.NewTxRangeFilter(990, int64(rpc.LatestBlockNumber), []common.Address{addr}, nil, nil),
+			f:    sys.NewTxRangeFilter(990, int64(rpc.LatestBlockNumber), 0, []common.Address{addr}, nil, nil),
 			want: `[{"blockHash":"0x36020790d78fb99953cba029042880e15cfb2c99ccfcc8521e8f3a687a3682e0","blockNumber":"0x3e7","from":"0x71562b71999873db5b286df957af199ec94617f7","gas":"0x7530","gasPrice":"0x7","hash":"0x8753150337b296468cb8b177c7efc1380c56c98a4c08b9b9dcf240706fc304cb","input":"0xc670f8640000000000000000000000000000000000000000000000000000746f70696333","nonce":"0x5","to":"0xff00000000000000000000000000000000000000","transactionIndex":"0x0","value":"0x0","type":"0x0","chainId":"0x1","v":"0x25","r":"0xcace86d5a4aa7c523dc21e5c2f5698beecd80a5f7773d39a89196d4d07853868","s":"0x2983ec62939515ac3a2971a88081f7720a95dc9ef18b9ae398b74132bda04308"},{"blockHash":"0xb166569ffd2b8f9865e6333dfaada62d5027749c381ff568493b24d594f711ab","blockNumber":"0x3e8","from":"0x71562b71999873db5b286df957af199ec94617f7","gas":"0x7530","gasPrice":"0x7","hash":"0xa919b50798f7ab32f2066b47e63d6225d69cbb9acbc7f3a4935f7c75919f78fc","input":"0xc670f8640000000000000000000000000000000000000000000000000000746f70696334","nonce":"0x6","to":"0xfe00000000000000000000000000000000000000","transactionIndex":"0x0","value":"0x0","type":"0x0","chainId":"0x1","v":"0x25","r":"0x2cc28a31219ceb5149bc5c7660d26943ac0d4e0aae7d08d5fc03d272928b08b0","s":"0x5a065f094e9143f6a1ba11cfe781ae3e979b9dc172c069f6edde4c3ad58162bc"}]`,
 		},
 		{
-			f:    sys.NewTxRangeFilter(990, int64(rpc.LatestBlockNumber), []common.Address{addr}, []common.Address{contract2}, nil),
+			f:    sys.NewTxRangeFilter(990, int64(rpc.LatestBlockNumber), 0, []common.Address{addr}, []common.Address{contract2}, nil),
 			want: `[{"blockHash":"0x36020790d78fb99953cba029042880e15cfb2c99ccfcc8521e8f3a687a3682e0","blockNumber":"0x3e7","from":"0x71562b71999873db5b286df957af199ec94617f7","gas":"0x7530","gasPrice":"0x7","hash":"0x8753150337b296468cb8b177c7efc1380c56c98a4c08b9b9dcf240706fc304cb","input":"0xc670f8640000000000000000000000000000000000000000000000000000746f70696333","nonce":"0x5","to":"0xff00000000000000000000000000000000000000","transactionIndex":"0x0","value":"0x0","type":"0x0","chainId":"0x1","v":"0x25","r":"0xcace86d5a4aa7c523dc21e5c2f5698beecd80a5f7773d39a89196d4d07853868","s":"0x2983ec62939515ac3a2971a88081f7720a95dc9ef18b9ae398b74132bda04308"}]`,
 		},
 		{
-			f:    sys.NewTxRangeFilter(0, int64(rpc.LatestBlockNumber), nil, []common.Address{contract}, [][]byte{common.Hex2Bytes("c670f864"), common.Hex2Bytes("78b9a1f3")}),
+			f:    sys.NewTxRangeFilter(0, int64(rpc.LatestBlockNumber), 0, nil, []common.Address{contract}, [][]byte{common.Hex2Bytes("c670f864"), common.Hex2Bytes("78b9a1f3")}),
 			want: `[{"blockHash":"0x24417bb49ce44cfad65da68f33b510bf2a129c0d89ccf06acb6958b8585ccf34","blockNumber":"0x2","from":"0x71562b71999873db5b286df957af199ec94617f7","gas":"0x7530","gasPrice":"0x2da282a8","hash":"0xa8028c655b6423204c8edfbc339f57b042d6bec2b6a61145d76b7c08b4cccd42","input":"0xc670f8640000000000000000000000000000000000000000000000000000746f70696331","nonce":"0x0","to":"0xfe00000000000000000000000000000000000000","transactionIndex":"0x0","value":"0x0","type":"0x0","chainId":"0x1","v":"0x25","r":"0xacd139f95e249a1d60fdb392ba0fa34a4fdc4f062203dc17f35f8e56f29d64d2","s":"0xcd785e8cdee241f414578e569da6ec152f432abeed61a7016dddffffa00c1c7"},{"blockHash":"0x7a7556792ca7d37882882e2b001fe14833eaf81c2c7f865c9c771ec37a024f6b","blockNumber":"0x3","from":"0x71562b71999873db5b286df957af199ec94617f7","gas":"0x7530","gasPrice":"0x280a0d96","hash":"0xdefe471992a07a02acdfbe33edaae22fbb86d7d3cec3f1b8e4e77702fb3acc1d","input":"0x78b9a1f30000000000000000000000000000000000000000000000000000746f706963320000000000000000000000000000000000000000000000000000746f70696331","nonce":"0x2","to":"0xfe00000000000000000000000000000000000000","transactionIndex":"0x0","value":"0x0","type":"0x0","chainId":"0x1","v":"0x26","r":"0x8aadf3ab0e624f0a44d3a3f0b12d9b846162c0a84d06a898b81c9a81a749fccb","s":"0x1c0fe3b723da1d841448bb8ed05d3f889e2509282129159889a6e0f3729b64cc"},{"blockHash":"0xb166569ffd2b8f9865e6333dfaada62d5027749c381ff568493b24d594f711ab","blockNumber":"0x3e8","from":"0x71562b71999873db5b286df957af199ec94617f7","gas":"0x7530","gasPrice":"0x7","hash":"0xa919b50798f7ab32f2066b47e63d6225d69cbb9acbc7f3a4935f7c75919f78fc","input":"0xc670f8640000000000000000000000000000000000000000000000000000746f70696334","nonce":"0x6","to":"0xfe00000000000000000000000000000000000000","transactionIndex":"0x0","value":"0x0","type":"0x0","chainId":"0x1","v":"0x25","r":"0x2cc28a31219ceb5149bc5c7660d26943ac0d4e0aae7d08d5fc03d272928b08b0","s":"0x5a065f094e9143f6a1ba11cfe781ae3e979b9dc172c069f6edde4c3ad58162bc"}]`,
+		},
+		{
+			f:    sys.NewTxRangeFilter(0, int64(rpc.LatestBlockNumber), 1, false, nil, []common.Address{contract}, [][]byte{common.Hex2Bytes("c670f864"), common.Hex2Bytes("78b9a1f3")}),
+			want: `[{"blockHash":"0x24417bb49ce44cfad65da68f33b510bf2a129c0d89ccf06acb6958b8585ccf34","blockNumber":"0x2","from":"0x71562b71999873db5b286df957af199ec94617f7","gas":"0x7530","gasPrice":"0x2da282a8","hash":"0xa8028c655b6423204c8edfbc339f57b042d6bec2b6a61145d76b7c08b4cccd42","input":"0xc670f8640000000000000000000000000000000000000000000000000000746f70696331","nonce":"0x0","to":"0xfe00000000000000000000000000000000000000","transactionIndex":"0x0","value":"0x0","type":"0x0","chainId":"0x1","v":"0x25","r":"0xacd139f95e249a1d60fdb392ba0fa34a4fdc4f062203dc17f35f8e56f29d64d2","s":"0xcd785e8cdee241f414578e569da6ec152f432abeed61a7016dddffffa00c1c7"}]`,
 		},
 		// TODO test that can find contract creation
 		// {
@@ -326,26 +329,26 @@ func TestTxFilters(t *testing.T) {
 		// 	want: `[{"blockHash":"0x24417bb49ce44cfad65da68f33b510bf2a129c0d89ccf06acb6958b8585ccf34","blockNumber":"0x2","from":"0x71562b71999873db5b286df957af199ec94617f7","gas":"0x7530","gasPrice":"0x2da282a8","hash":"0xa8028c655b6423204c8edfbc339f57b042d6bec2b6a61145d76b7c08b4cccd42","input":"0xc670f8640000000000000000000000000000000000000000000000000000746f70696331","nonce":"0x0","to":"0xfe00000000000000000000000000000000000000","transactionIndex":"0x0","value":"0x0","type":"0x0","chainId":"0x1","v":"0x25","r":"0xacd139f95e249a1d60fdb392ba0fa34a4fdc4f062203dc17f35f8e56f29d64d2","s":"0xcd785e8cdee241f414578e569da6ec152f432abeed61a7016dddffffa00c1c7"},{"blockHash":"0x7a7556792ca7d37882882e2b001fe14833eaf81c2c7f865c9c771ec37a024f6b","blockNumber":"0x3","from":"0x71562b71999873db5b286df957af199ec94617f7","gas":"0x7530","gasPrice":"0x280a0d96","hash":"0xdefe471992a07a02acdfbe33edaae22fbb86d7d3cec3f1b8e4e77702fb3acc1d","input":"0x78b9a1f30000000000000000000000000000000000000000000000000000746f706963320000000000000000000000000000000000000000000000000000746f70696331","nonce":"0x2","to":"0xfe00000000000000000000000000000000000000","transactionIndex":"0x0","value":"0x0","type":"0x0","chainId":"0x1","v":"0x26","r":"0x8aadf3ab0e624f0a44d3a3f0b12d9b846162c0a84d06a898b81c9a81a749fccb","s":"0x1c0fe3b723da1d841448bb8ed05d3f889e2509282129159889a6e0f3729b64cc"},{"blockHash":"0x7a11433433b82333fc2c2c3b75f264aad0539f830b2e17851c1a801a4473cfbd","blockNumber":"0x3e8","from":"0x71562b71999873db5b286df957af199ec94617f7","gas":"0x7530","gasPrice":"0x7","hash":"0x23de4893c396523db3187da311b8abd019171f60e98c5bfa2a093504d097bfef","input":"0xc670f8640000000000000000000000000000000000000000000000000000746f70696334","nonce":"0x5","to":"0xfe00000000000000000000000000000000000000","transactionIndex":"0x0","value":"0x0","type":"0x0","chainId":"0x1","v":"0x25","r":"0x570f5f7f4bebc2fff0a95c3f0c2139f3bdc4f4008181221964ade5d45bc9bb98","s":"0x7d54831ec83c774cce49589412da5851ba79a2373ab0c26595b323940ead70a4"}]`,
 		// },
 		{
-			f:    sys.NewTxRangeFilter(0, int64(rpc.LatestBlockNumber), []common.Address{addr}, []common.Address{addr}, [][]byte{nil}),
+			f:    sys.NewTxRangeFilter(0, int64(rpc.LatestBlockNumber), 0, []common.Address{addr}, []common.Address{addr}, [][]byte{nil}),
 			want: `[{"blockHash":"0xf5624ceb3ec3d359bb117ae45202f2306a0c8d0c79208e1c05bfbe0cbb73489f","blockNumber":"0x5","from":"0x71562b71999873db5b286df957af199ec94617f7","gas":"0x7530","gasPrice":"0x1ed0d3c5","hash":"0xfb939950b542fc4c4f9b2bb9ca1b810532ed890ddafdb0603143878da48dbcdb","input":"0x","nonce":"0x4","to":"0x71562b71999873db5b286df957af199ec94617f7","transactionIndex":"0x0","value":"0x1","type":"0x0","chainId":"0x1","v":"0x25","r":"0x306eafff616b2048eec0fc9b1fd2bff77e7a72902686e16996f06521750ae3cf","s":"0xe7baa9f4ae61fd040ab21419abe5a4ca9771abdb9c9efc1e8bfa1e976edf081"}]`,
 		},
 		{
-			f: sys.NewTxRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.FinalizedBlockNumber), nil, nil, nil),
+			f: sys.NewTxRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.FinalizedBlockNumber), 0, nil, nil, nil),
 		},
 		{
-			f:   sys.NewTxRangeFilter(int64(rpc.SafeBlockNumber), int64(rpc.LatestBlockNumber), nil, nil, nil),
+			f:   sys.NewTxRangeFilter(int64(rpc.SafeBlockNumber), int64(rpc.LatestBlockNumber), 0, nil, nil, nil),
 			err: "safe header not found",
 		},
 		{
-			f:   sys.NewTxRangeFilter(int64(rpc.SafeBlockNumber), int64(rpc.SafeBlockNumber), nil, nil, nil),
+			f:   sys.NewTxRangeFilter(int64(rpc.SafeBlockNumber), int64(rpc.SafeBlockNumber), 0, nil, nil, nil),
 			err: "safe header not found",
 		},
 		{
-			f:   sys.NewTxRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.SafeBlockNumber), nil, nil, nil),
+			f:   sys.NewTxRangeFilter(int64(rpc.LatestBlockNumber), int64(rpc.SafeBlockNumber), 0, nil, nil, nil),
 			err: "safe header not found",
 		},
 		{
-			f:   sys.NewTxRangeFilter(int64(rpc.PendingBlockNumber), int64(rpc.LatestBlockNumber), nil, nil, nil),
+			f:   sys.NewTxRangeFilter(int64(rpc.PendingBlockNumber), int64(rpc.LatestBlockNumber), 0, nil, nil, nil),
 			err: errInvalidBlockRange.Error(),
 		},
 	} {
@@ -368,7 +371,7 @@ func TestTxFilters(t *testing.T) {
 	}
 
 	t.Run("timeout", func(t *testing.T) {
-		f := sys.NewTxRangeFilter(0, -1, nil, nil, nil)
+		f := sys.NewTxRangeFilter(0, -1, 0, nil, nil, nil)
 		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Hour))
 		defer cancel()
 		_, err := f.Transactions(ctx)

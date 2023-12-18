@@ -391,7 +391,7 @@ func (api *FilterAPI) GetTransactions(ctx context.Context, crit TxFilterCriteria
 			return nil, errInvalidBlockRange
 		}
 		// Construct the range filter
-		filter = api.sys.NewTxRangeFilter(begin, end, crit.FromAddresses, crit.ToAddresses, crit.SigHashes)
+		filter = api.sys.NewTxRangeFilter(begin, end, 0, crit.FromAddresses, crit.ToAddresses, crit.SigHashes)
 	}
 	// Run the filter and return all the logs
 	txs, err := filter.Transactions(ctx)

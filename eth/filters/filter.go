@@ -34,8 +34,8 @@ type Filter struct {
 	addresses []common.Address
 	topics    [][]common.Hash
 
-	block      *common.Hash // Block hash if filtering a single block
-	begin, end int64        // Range interval if filtering multiple blocks
+	block             *common.Hash // Block hash if filtering a single block
+	begin, end, limit int64        // Range interval if filtering multiple blocks
 
 	matcher *bloombits.Matcher
 }
@@ -43,6 +43,12 @@ type Filter struct {
 // NewRangeFilter creates a new filter which uses a bloom filter on blocks to
 // figure out whether a particular block is interesting or not.
 func (sys *FilterSystem) NewRangeFilter(begin, end int64, addresses []common.Address, topics [][]common.Hash) *Filter {
+	return sys.NewRangeFilterWithLimit(begin, end, 0, addresses, topics)
+}
+
+// NewRangeFilter creates a new filter which uses a bloom filter on blocks to
+// figure out whether a particular block is interesting or not.
+func (sys *FilterSystem) NewRangeFilterWithLimit(begin, end, limit int64, addresses []common.Address, topics [][]common.Hash) *Filter {
 	// Flatten the address and topic filter clauses into a single bloombits filter
 	// system. Since the bloombits are not positional, nil topics are permitted,
 	// which get flattened into a nil byte slice.
@@ -69,6 +75,7 @@ func (sys *FilterSystem) NewRangeFilter(begin, end int64, addresses []common.Add
 	filter.matcher = bloombits.NewMatcher(size, filters)
 	filter.begin = begin
 	filter.end = end
+	filter.limit = limit
 
 	return filter
 }
@@ -131,12 +138,27 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 		return nil, err
 	}
 
-	logChan, errChan := f.rangeLogsAsync(ctx)
+	var limitChan = make(chan bool, 1)
+	defer close(limitChan)
+
+	logChan, errChan := f.rangeLogsAsync(ctx, limitChan)
 	var logs []*types.Log
+
+	var checkLimit = func() bool {
+		if f.limit != 0 && len(logs) >= int(f.limit) {
+			limitChan <- true
+			return true
+		}
+		return false
+	}
+
 	for {
 		select {
 		case log := <-logChan:
 			logs = append(logs, log)
+			if checkLimit() {
+				return logs, nil
+			}
 		case err := <-errChan:
 			if err != nil {
 				// if an error occurs during extraction, we do return the extracted data
@@ -146,6 +168,9 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 			if endPending {
 				pendingLogs := f.pendingLogs()
 				logs = append(logs, pendingLogs...)
+				if checkLimit() {
+					return logs, nil
+				}
 			}
 			return logs, nil
 		}
@@ -154,7 +179,7 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 
 // rangeLogsAsync retrieves block-range logs that match the filter criteria asynchronously,
 // it creates and returns two channels: one for delivering log data, and one for reporting errors.
-func (f *Filter) rangeLogsAsync(ctx context.Context) (chan *types.Log, chan error) {
+func (f *Filter) rangeLogsAsync(ctx context.Context, limitChan chan bool) (chan *types.Log, chan error) {
 	var (
 		logChan = make(chan *types.Log)
 		errChan = make(chan error)
@@ -176,13 +201,13 @@ func (f *Filter) rangeLogsAsync(ctx context.Context) (chan *types.Log, chan erro
 			if indexed > end {
 				indexed = end + 1
 			}
-			if err = f.indexedLogs(ctx, indexed-1, logChan); err != nil {
+			if err = f.indexedLogs(ctx, indexed-1, logChan, limitChan); err != nil {
 				errChan <- err
 				return
 			}
 		}
 
-		if err := f.unindexedLogs(ctx, end, logChan); err != nil {
+		if err := f.unindexedLogs(ctx, end, logChan, limitChan); err != nil {
 			errChan <- err
 			return
 		}
@@ -195,7 +220,7 @@ func (f *Filter) rangeLogsAsync(ctx context.Context) (chan *types.Log, chan erro
 
 // indexedLogs returns the logs matching the filter criteria based on the bloom
 // bits indexed available locally or via the network.
-func (f *Filter) indexedLogs(ctx context.Context, end uint64, logChan chan *types.Log) error {
+func (f *Filter) indexedLogs(ctx context.Context, end uint64, logChan chan *types.Log, limitChan chan bool) error {
 	// Create a matcher session and request servicing from the backend
 	matches := make(chan uint64, 64)
 
@@ -232,7 +257,8 @@ func (f *Filter) indexedLogs(ctx context.Context, end uint64, logChan chan *type
 			for _, log := range found {
 				logChan <- log
 			}
-
+		case <-limitChan:
+			return nil
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -241,7 +267,7 @@ func (f *Filter) indexedLogs(ctx context.Context, end uint64, logChan chan *type
 
 // unindexedLogs returns the logs matching the filter criteria based on raw block
 // iteration and bloom matching.
-func (f *Filter) unindexedLogs(ctx context.Context, end uint64, logChan chan *types.Log) error {
+func (f *Filter) unindexedLogs(ctx context.Context, end uint64, logChan chan *types.Log, limitChan chan bool) error {
 	for ; f.begin <= int64(end); f.begin++ {
 		header, err := f.sys.backend.HeaderByNumber(ctx, rpc.BlockNumber(f.begin))
 		if header == nil || err != nil {
@@ -256,6 +282,8 @@ func (f *Filter) unindexedLogs(ctx context.Context, end uint64, logChan chan *ty
 			case logChan <- log:
 			case <-ctx.Done():
 				return ctx.Err()
+			case <-limitChan:
+				return nil
 			}
 		}
 	}
