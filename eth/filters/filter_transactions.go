@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -24,6 +25,7 @@ type TxFilter struct {
 
 	block             *common.Hash // Block hash if filtering a single block
 	begin, end, limit int64        // Range interval if filtering multiple blocks
+	childFilters []*TxFilter
 
 	matcher *bloombits.Matcher
 }
@@ -68,6 +70,38 @@ func (sys *FilterSystem) NewTxBlockFilter(block common.Hash, fromAddresses, toAd
 	filter := newTxFilter(sys, fromAddresses, toAddresses, sigHashes)
 	filter.block = &block
 	return filter
+}
+
+func (sys* FilterSystem) NewBatchTxRangeFilter(filters []*TxFilter) (*TxFilter, error) {
+
+	if len(filters) == 0 {
+		return nil, errors.New("At least one filter is required")
+	}
+
+	var begin, end, limit int64
+	var fromAddresses, toAddresses []common.Address
+	var sigHashes [][]byte
+
+	for _, f := range filters {
+		if f.block != nil {
+			return nil, errors.New("Cannot batch with range filter")
+		}
+		if begin == 0 {
+			begin = f.begin
+		} else {
+			begin = int64(math.Min(float64(begin), float64(f.begin)))
+		}
+		end = int64(math.Max(float64(end), float64(f.end)))
+		limit = int64(math.Max(float64(limit), float64(f.limit)))
+		fromAddresses = append(fromAddresses, f.fromAddresses...)
+		toAddresses = append(toAddresses, f.toAddresses...)
+		sigHashes = append(sigHashes, f.sigHashes...)
+	}
+
+	batched := sys.NewTxRangeFilter(begin, end, limit, fromAddresses, toAddresses, sigHashes)
+	batched.childFilters = filters
+
+	return batched, nil
 }
 
 func newTxFilter(sys *FilterSystem, fromAddresses, toAddresses []common.Address, sigHashes [][]byte) *TxFilter {
@@ -124,6 +158,7 @@ func (f *TxFilter) Transactions(ctx context.Context) ([]*ethapi.RPCTransaction, 
 	txChan, errChan := f.rangeTransactionsAsync(ctx, limitChan)
 	var txs []*ethapi.RPCTransaction
 
+	// TODO limit is for number of blocks not number of logs
 	var checkLimit = func() bool {
 		if f.limit != 0 && len(txs) >= int(f.limit) {
 			limitChan <- true
@@ -309,7 +344,7 @@ func (f *TxFilter) pendingTransactions() ([]*ethapi.RPCTransaction, error) {
 			rpcTx := ethapi.NewRPCTransaction(tx, block.Header(), uint64(i), f.sys.backend.ChainConfig())
 			rpcTxs = append(rpcTxs, &rpcTx)
 		}
-		return filterTransactionsRPC(rpcTxs, nil, nil, f.fromAddresses, f.toAddresses, f.sigHashes), nil
+		return f.childFilterTransactions(rpcTxs), nil
 	}
 	return nil, nil
 }
@@ -333,7 +368,7 @@ func (f *TxFilter) checkMatches(ctx context.Context, header *types.Header) ([]*e
 		rpcTxs = append(rpcTxs, &rpcTx)
 	}
 
-	txs := filterTransactionsRPC(rpcTxs, nil, nil, f.fromAddresses, f.toAddresses, f.sigHashes)
+	txs := f.childFilterTransactions(rpcTxs)
 	if len(txs) == 0 {
 		return nil, nil
 	}
@@ -341,10 +376,37 @@ func (f *TxFilter) checkMatches(ctx context.Context, header *types.Header) ([]*e
 	return txs, nil
 }
 
+func (f *TxFilter) childFilterTransactions(txs []*ethapi.RPCTransaction) []*ethapi.RPCTransaction {
+	if f.childFilters == nil || len(f.childFilters) == 0 {
+		return filterTransactions(txs, nil, nil, f.fromAddresses, f.toAddresses, f.sigHashes)
+	}
+
+	var ret []*ethapi.RPCTransaction
+	for _, tx := range txs {
+		for _, f := range f.childFilters {
+			if filterTransaction(tx, nil, nil, f.fromAddresses, f.toAddresses, f.sigHashes) {
+				ret = append(ret, tx)
+				// Break the inner loop
+				break
+			}
+		}
+	}
+	return ret
+}
+
+func filterTransactions(txs []*ethapi.RPCTransaction, fromBlock, toBlock *big.Int, fromAddresses, toAddresses []common.Address, sigHashes [][]byte) []*ethapi.RPCTransaction {
+	var ret []*ethapi.RPCTransaction
+	for _, tx := range txs {
+		if filterTransaction(tx, fromBlock, toBlock, fromAddresses, toAddresses, sigHashes) {
+			ret = append(ret, tx)
+		}
+	}
+	return ret
+}
+
 // filterTransactions creates a slice of logs matching the given criteria.
-func filterTransactionsRPC(txs []*ethapi.RPCTransaction, fromBlock, toBlock *big.Int, fromAddresses, toAddresses []common.Address, sigHashes [][]byte) []*ethapi.RPCTransaction {
-	var check = func(tx *ethapi.RPCTransaction) bool {
-		if fromBlock != nil && fromBlock.Int64() >= 0 && fromBlock.Uint64() > tx.BlockNumber.ToInt().Uint64() {
+func filterTransaction(tx *ethapi.RPCTransaction, fromBlock, toBlock *big.Int, fromAddresses, toAddresses []common.Address, sigHashes [][]byte) bool {
+	if fromBlock != nil && fromBlock.Int64() >= 0 && fromBlock.Uint64() > tx.BlockNumber.ToInt().Uint64() {
 			return false
 		}
 		if toBlock != nil && toBlock.Int64() >= 0 && toBlock.Uint64() < tx.BlockNumber.ToInt().Uint64() {
@@ -379,15 +441,6 @@ func filterTransactionsRPC(txs []*ethapi.RPCTransaction, fromBlock, toBlock *big
 		}
 
 		return true
-	}
-
-	var ret []*ethapi.RPCTransaction
-	for _, tx := range txs {
-		if check(tx) {
-			ret = append(ret, tx)
-		}
-	}
-	return ret
 }
 
 // bloomTxFilter checks a bloom filter for transactions that match the given criteria

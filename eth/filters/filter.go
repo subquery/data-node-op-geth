@@ -19,6 +19,7 @@ package filters
 import (
 	"context"
 	"errors"
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -36,6 +37,8 @@ type Filter struct {
 
 	block             *common.Hash // Block hash if filtering a single block
 	begin, end, limit int64        // Range interval if filtering multiple blocks
+
+	childFilters []*Filter
 
 	matcher *bloombits.Matcher
 }
@@ -78,6 +81,37 @@ func (sys *FilterSystem) NewRangeFilterWithLimit(begin, end, limit int64, addres
 	filter.limit = limit
 
 	return filter
+}
+
+func (sys* FilterSystem) NewBatchRangeFilter(filters []*Filter) (*Filter, error) {
+
+	if len(filters) == 0 {
+		return nil, errors.New("At least one filter is required")
+	}
+
+	var begin, end, limit int64
+	var addresses []common.Address
+	var topics [][]common.Hash
+
+	for _, f := range filters {
+		if f.block != nil {
+			return nil, errors.New("Cannot batch with range filter")
+		}
+		if begin == 0 {
+			begin = f.begin
+		} else {
+			begin = int64(math.Min(float64(begin), float64(f.begin)))
+		}
+		end = int64(math.Max(float64(end), float64(f.end)))
+		limit = int64(math.Max(float64(limit), float64(f.limit)))
+		addresses = append(addresses, f.addresses...)
+		topics = append(topics, f.topics...)
+	}
+
+	batched := sys.NewRangeFilterWithLimit(begin, end, limit, addresses, topics)
+	batched.childFilters = filters
+
+	return batched, nil
 }
 
 // NewBlockFilter creates a new filter which directly inspects the contents of
@@ -144,6 +178,7 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	logChan, errChan := f.rangeLogsAsync(ctx, limitChan)
 	var logs []*types.Log
 
+	// TODO limit is for number of blocks not number of logs
 	var checkLimit = func() bool {
 		if f.limit != 0 && len(logs) >= int(f.limit) {
 			limitChan <- true
@@ -311,7 +346,7 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) ([]*typ
 	if err != nil {
 		return nil, err
 	}
-	logs := filterLogs(cached.logs, nil, nil, f.addresses, f.topics)
+	logs := f.childFilterLogs(cached.logs)
 	if len(logs) == 0 {
 		return nil, nil
 	}
@@ -344,7 +379,7 @@ func (f *Filter) pendingLogs() []*types.Log {
 		for _, r := range receipts {
 			unfiltered = append(unfiltered, r.Logs...)
 		}
-		return filterLogs(unfiltered, nil, nil, f.addresses, f.topics)
+		return f.childFilterLogs(unfiltered)
 	}
 	return nil
 }
@@ -359,39 +394,58 @@ func includes[T comparable](things []T, element T) bool {
 	return false
 }
 
-// filterLogs creates a slice of logs matching the given criteria.
-func filterLogs(logs []*types.Log, fromBlock, toBlock *big.Int, addresses []common.Address, topics [][]common.Hash) []*types.Log {
-	var check = func(log *types.Log) bool {
-		if fromBlock != nil && fromBlock.Int64() >= 0 && fromBlock.Uint64() > log.BlockNumber {
-			return false
-		}
-		if toBlock != nil && toBlock.Int64() >= 0 && toBlock.Uint64() < log.BlockNumber {
-			return false
-		}
-		if len(addresses) > 0 && !includes(addresses, log.Address) {
-			return false
-		}
-		// If the to filtered topics is greater than the amount of topics in logs, skip.
-		if len(topics) > len(log.Topics) {
-			return false
-		}
-		for i, sub := range topics {
-			if len(sub) == 0 {
-				continue // empty rule set == wildcard
-			}
-			if !includes(sub, log.Topics[i]) {
-				return false
-			}
-		}
-		return true
+func (f *Filter) childFilterLogs(logs []*types.Log) []*types.Log {
+	if f.childFilters == nil || len(f.childFilters) == 0 {
+		return filterLogs(logs, nil, nil, f.addresses, f.topics)
 	}
+
 	var ret []*types.Log
 	for _, log := range logs {
-		if check(log) {
+		for _, f := range f.childFilters {
+			if filterLog(log, nil, nil, f.addresses, f.topics) {
+				ret = append(ret, log)
+				// Break the inner loop
+				break
+			}
+		}
+	}
+	return ret
+}
+
+// filterLogs creates a slice of logs matching the given criteria.
+func filterLogs(logs []*types.Log, fromBlock, toBlock *big.Int, addresses []common.Address, topics [][]common.Hash) []*types.Log {
+	var ret []*types.Log
+	for _, log := range logs {
+		if filterLog(log, fromBlock, toBlock, addresses, topics) {
 			ret = append(ret, log)
 		}
 	}
 	return ret
+}
+
+func filterLog(log *types.Log, fromBlock, toBlock *big.Int, addresses []common.Address, topics [][]common.Hash) bool {
+	if fromBlock != nil && fromBlock.Int64() >= 0 && fromBlock.Uint64() > log.BlockNumber {
+		return false
+	}
+	if toBlock != nil && toBlock.Int64() >= 0 && toBlock.Uint64() < log.BlockNumber {
+		return false
+	}
+	if len(addresses) > 0 && !includes(addresses, log.Address) {
+		return false
+	}
+	// If the to filtered topics is greater than the amount of topics in logs, skip.
+	if len(topics) > len(log.Topics) {
+		return false
+	}
+	for i, sub := range topics {
+		if len(sub) == 0 {
+			continue // empty rule set == wildcard
+		}
+		if !includes(sub, log.Topics[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 func bloomFilter(bloom types.Bloom, addresses []common.Address, topics [][]common.Hash) bool {
