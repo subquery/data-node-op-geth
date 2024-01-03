@@ -83,7 +83,7 @@ func (sys *FilterSystem) NewRangeFilterWithLimit(begin, end, limit int64, addres
 	return filter
 }
 
-func (sys* FilterSystem) NewBatchRangeFilter(filters []*Filter) (*Filter, error) {
+func (sys *FilterSystem) NewBatchRangeFilter(filters []*Filter) (*Filter, error) {
 
 	if len(filters) == 0 {
 		return nil, errors.New("At least one filter is required")
@@ -180,10 +180,25 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 
 	// TODO limit is for number of blocks not number of logs
 	var checkLimit = func() bool {
-		if f.limit != 0 && len(logs) >= int(f.limit) {
+		if f.limit == 0 {
+			return false
+		}
+
+		// Shortcut to check limit, if we have less tx than the limit there is no need to check unique blocks
+		if len(logs) < int(f.limit) {
+			return false
+		}
+
+		blocks := map[uint64]bool{}
+		for _, log := range logs {
+			blocks[log.BlockNumber] = true
+		}
+
+		if len(blocks) >= int(f.limit) {
 			limitChan <- true
 			return true
 		}
+
 		return false
 	}
 

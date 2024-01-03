@@ -25,7 +25,7 @@ type TxFilter struct {
 
 	block             *common.Hash // Block hash if filtering a single block
 	begin, end, limit int64        // Range interval if filtering multiple blocks
-	childFilters []*TxFilter
+	childFilters      []*TxFilter
 
 	matcher *bloombits.Matcher
 }
@@ -72,7 +72,7 @@ func (sys *FilterSystem) NewTxBlockFilter(block common.Hash, fromAddresses, toAd
 	return filter
 }
 
-func (sys* FilterSystem) NewBatchTxRangeFilter(filters []*TxFilter) (*TxFilter, error) {
+func (sys *FilterSystem) NewBatchTxRangeFilter(filters []*TxFilter) (*TxFilter, error) {
 
 	if len(filters) == 0 {
 		return nil, errors.New("At least one filter is required")
@@ -158,12 +158,26 @@ func (f *TxFilter) Transactions(ctx context.Context) ([]*ethapi.RPCTransaction, 
 	txChan, errChan := f.rangeTransactionsAsync(ctx, limitChan)
 	var txs []*ethapi.RPCTransaction
 
-	// TODO limit is for number of blocks not number of logs
 	var checkLimit = func() bool {
-		if f.limit != 0 && len(txs) >= int(f.limit) {
+		if f.limit == 0 {
+			return false
+		}
+
+		// Shortcut to check limit, if we have less tx than the limit there is no need to check unique blocks
+		if len(txs) < int(f.limit) {
+			return false
+		}
+
+		blocks := map[uint64]bool{}
+		for _, tx := range txs {
+			blocks[tx.BlockNumber.ToInt().Uint64()] = true
+		}
+
+		if len(blocks) >= int(f.limit) {
 			limitChan <- true
 			return true
 		}
+
 		return false
 	}
 
@@ -407,40 +421,40 @@ func filterTransactions(txs []*ethapi.RPCTransaction, fromBlock, toBlock *big.In
 // filterTransactions creates a slice of logs matching the given criteria.
 func filterTransaction(tx *ethapi.RPCTransaction, fromBlock, toBlock *big.Int, fromAddresses, toAddresses []common.Address, sigHashes [][]byte) bool {
 	if fromBlock != nil && fromBlock.Int64() >= 0 && fromBlock.Uint64() > tx.BlockNumber.ToInt().Uint64() {
-			return false
-		}
-		if toBlock != nil && toBlock.Int64() >= 0 && toBlock.Uint64() < tx.BlockNumber.ToInt().Uint64() {
-			return false
-		}
+		return false
+	}
+	if toBlock != nil && toBlock.Int64() >= 0 && toBlock.Uint64() < tx.BlockNumber.ToInt().Uint64() {
+		return false
+	}
 
-		if len(fromAddresses) > 0 && !includes(fromAddresses, tx.From) {
-			return false
-		}
+	if len(fromAddresses) > 0 && !includes(fromAddresses, tx.From) {
+		return false
+	}
 
-		// To can be nil for contract creation
-		if len(toAddresses) > 0 && (tx.To == nil || !includes(toAddresses, *tx.To)) {
-			return false
-		}
+	// To can be nil for contract creation
+	if len(toAddresses) > 0 && (tx.To == nil || !includes(toAddresses, *tx.To)) {
+		return false
+	}
 
-		if sigHashes != nil && len(sigHashes) > 0 {
-			var included bool
-			for _, sigHash := range sigHashes {
-				// Handle non-contract call
-				if (tx.Input == nil || len(tx.Input) == 0) && (sigHash == nil || len(sigHash) == 0) {
-					included = true
-					break
-				}
-				if bytes.HasPrefix(tx.Input, sigHash) {
-					included = true
-					break
-				}
+	if sigHashes != nil && len(sigHashes) > 0 {
+		var included bool
+		for _, sigHash := range sigHashes {
+			// Handle non-contract call
+			if (tx.Input == nil || len(tx.Input) == 0) && (sigHash == nil || len(sigHash) == 0) {
+				included = true
+				break
 			}
-			if !included {
-				return false
+			if bytes.HasPrefix(tx.Input, sigHash) {
+				included = true
+				break
 			}
 		}
+		if !included {
+			return false
+		}
+	}
 
-		return true
+	return true
 }
 
 // bloomTxFilter checks a bloom filter for transactions that match the given criteria
