@@ -1,6 +1,3 @@
-bitbucket.org/onfinalitydev/dict-takoyaki v0.0.0-20230927003741-13a0e4ffdbd8/go.mod h1:dYE1An1EKETMU90LH+N8325KfqoLQuKGHvsODdk2wB0=
-bitbucket.org/onfinalitydev/dict-takoyaki v0.0.0-20231206013050-f9f038680c85 h1:gsHTa924pFIQegUYoDXRC6EpfJDbN9mcl2a1+xe6XTg=
-bitbucket.org/onfinalitydev/dict-takoyaki v0.0.0-20231206013050-f9f038680c85/go.mod h1:OLkoUfYKDC+iK6i6q239/QGIvV/32jvbrtrKw7CqGuI=
 cloud.google.com/go v0.26.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
 cloud.google.com/go v0.34.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
 cloud.google.com/go v0.38.0/go.mod h1:990N+gfupTy94rShfmMCWGDn0LpTmnzTp2qbd1dvSRU=

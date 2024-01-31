@@ -5,7 +5,6 @@ go 1.21
 toolchain go1.21.6
 
 require (
-	bitbucket.org/onfinalitydev/dict-takoyaki v0.0.0-20231206013050-f9f038680c85
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.2.0
 	github.com/Microsoft/go-winio v0.6.1
 	github.com/VictoriaMetrics/fastcache v1.12.1

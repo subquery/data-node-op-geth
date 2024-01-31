@@ -6,8 +6,6 @@ import (
 	"math"
 	"math/big"
 	"sort"
-
-	subqlD "bitbucket.org/onfinalitydev/dict-takoyaki/subql"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -53,6 +51,16 @@ type SubqlAPI struct {
 	genesisHeader *types.Header
 }
 
+type Capability struct {
+	AvailableBlocks []struct {
+		StartHeight int `json:"startHeight"`
+		EndHeight   int `json:"endHeight"`
+	} `json:"availableBlocks"`
+	Filters            map[string][]string `json:"filters"`
+	SupportedResponses []string            `json:"supportedResponses"`
+	GenesisHash        string              `json:"genesisHash"`
+}
+
 func NewSubqlApi(sys *FilterSystem, backend ethapi.Backend) *SubqlAPI {
 	log.Info("NewSubqlApi init")
 	api := &SubqlAPI{
@@ -64,8 +72,8 @@ func NewSubqlApi(sys *FilterSystem, backend ethapi.Backend) *SubqlAPI {
 	return api
 }
 
-func (api *SubqlAPI) FilterBlocksCapabilities(ctx context.Context) (*subqlD.Capability, error) {
-	res := &subqlD.Capability{
+func (api *SubqlAPI) FilterBlocksCapabilities(ctx context.Context) (*Capability, error) {
+	res := &Capability{
 		Filters: map[string][]string{
 			"transactions": {"from", "to", "data"},
 			"logs":         {"address", "topics0", "topics1", "topics2", "topics3"},
