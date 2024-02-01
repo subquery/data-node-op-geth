@@ -190,11 +190,6 @@ func blockReceiptsKey(number uint64, hash common.Hash) []byte {
 	return append(append(blockReceiptsPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
 }
 
-// blockReceiptsKey = blockReceiptsPrefix + num (uint64 big endian) + hash
-func blockTransactionBloomKey(number uint64, hash common.Hash) []byte {
-	return append(append(blockTransactionBloomPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
-}
-
 // txLookupKey = txLookupPrefix + hash
 func txLookupKey(hash common.Hash) []byte {
 	return append(txLookupPrefix, hash.Bytes()...)
@@ -222,16 +217,6 @@ func storageSnapshotsKey(accountHash common.Hash) []byte {
 // bloomBitsKey = bloomBitsPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash
 func bloomBitsKey(bit uint, section uint64, hash common.Hash) []byte {
 	key := append(append(bloomBitsPrefix, make([]byte, 10)...), hash.Bytes()...)
-
-	binary.BigEndian.PutUint16(key[1:], uint16(bit))
-	binary.BigEndian.PutUint64(key[3:], section)
-
-	return key
-}
-
-// bloomBitsTransactionKey = BloomBitsTransactionIndexPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash
-func bloomBitsTransactionKey(bit uint, section uint64, hash common.Hash) []byte {
-	key := append(append(bloomBitsTransactionPrefix, make([]byte, 10)...), hash.Bytes()...)
 
 	binary.BigEndian.PutUint16(key[1:], uint16(bit))
 	binary.BigEndian.PutUint64(key[3:], section)
@@ -351,4 +336,19 @@ func ResolveStorageTrieNode(key []byte) (bool, common.Hash, []byte) {
 func IsStorageTrieNode(key []byte) bool {
 	ok, _, _ := ResolveStorageTrieNode(key)
 	return ok
+}
+
+// blockReceiptsKey = blockReceiptsPrefix + num (uint64 big endian) + hash
+func blockTransactionBloomKey(number uint64, hash common.Hash) []byte {
+	return append(append(blockTransactionBloomPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
+}
+
+// bloomBitsTransactionKey = BloomBitsTransactionIndexPrefix + bit (uint16 big endian) + section (uint64 big endian) + hash
+func bloomBitsTransactionKey(bit uint, section uint64, hash common.Hash) []byte {
+	key := append(append(bloomBitsTransactionPrefix, make([]byte, 10)...), hash.Bytes()...)
+
+	binary.BigEndian.PutUint16(key[1:], uint16(bit))
+	binary.BigEndian.PutUint64(key[3:], section)
+
+	return key
 }
