@@ -343,3 +343,15 @@ func (b *LesApiBackend) HistoricalRPCService() *rpc.Client {
 func (b *LesApiBackend) Genesis() *types.Block {
 	return b.eth.blockchain.Genesis()
 }
+
+func (b *LesApiBackend) GetTxBloom(context context.Context, hash common.Hash) types.Bloom {
+	panic("not supported")
+}
+
+func (b *LesApiBackend) TxBloomStatus() (uint64, uint64) {
+	panic("not supported")
+}
+
+func (b *LesApiBackend) TxServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {
+	panic("not supported")
+}

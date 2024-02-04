@@ -1579,6 +1579,8 @@ type RPCTransaction struct {
 }
 
 func NewRPCTransaction(tx *types.Transaction, header *types.Header, index uint64, config *params.ChainConfig) RPCTransaction {
+
+	// receipt := depositTxReceipt(ctx, header.Hash(), index, backend, tx)
 	return *newRPCTransaction(
 		tx,
 		header.Hash(),
@@ -1587,6 +1589,7 @@ func NewRPCTransaction(tx *types.Transaction, header *types.Header, index uint64
 		index,
 		header.BaseFee,
 		config,
+		nil, // TODO
 	)
 }
 

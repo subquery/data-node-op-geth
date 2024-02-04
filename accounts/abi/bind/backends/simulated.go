@@ -1045,3 +1045,15 @@ func nullSubscription() event.Subscription {
 		return nil
 	})
 }
+
+func (fb *filterBackend) GetTxBloom(context context.Context, hash common.Hash) types.Bloom {
+	panic("not supported")
+}
+
+func (fb *filterBackend) TxBloomStatus() (uint64, uint64) {
+	panic("not supported")
+}
+
+func (fb *filterBackend) TxServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {
+	panic("not supported")
+}
