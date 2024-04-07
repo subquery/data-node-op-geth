@@ -1473,6 +1473,7 @@ func NewRPCTransaction(tx *types.Transaction, header *types.Header, index uint64
 		index,
 		header.BaseFee,
 		config,
+		nil,
 	)
 }
 
