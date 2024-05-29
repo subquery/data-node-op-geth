@@ -568,7 +568,7 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 	}
 	args.Addresses = addresses
 
-	if len(topic) > maxSubTopics {
+	if len(raw.Topics) > maxSubTopics {
 		return errExceedMaxTopics
 	}
 
@@ -610,9 +610,6 @@ func (args *TxFilterCriteria) UnmarshalJSON(data []byte) error {
 		if raw.ToBlock != nil {
 			args.ToBlock = big.NewInt(raw.ToBlock.Int64())
 		}
-	}
-	if len(raw.Topics) > maxTopics {
-		return errExceedMaxTopics
 	}
 
 	fromAddress, err := decodeAddresses(raw.FromAddress)
