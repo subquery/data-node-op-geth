@@ -184,6 +184,10 @@ type Config struct {
 
 	InteropMessageRPC       string `toml:",omitempty"`
 	InteropMempoolFiltering bool   `toml:",omitempty"`
+
+	// The Data Node Sharding Range
+	ShardStart *uint64
+	ShardEnd   *uint64 // 0 value means no limit on end
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain config.
