@@ -147,19 +147,9 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 		return f.blockLogs(ctx, header)
 	}
 
-	var (
-		beginPending = f.begin == rpc.PendingBlockNumber.Int64()
-		endPending   = f.end == rpc.PendingBlockNumber.Int64()
-	)
-
-	// special case for pending logs
-	if beginPending && !endPending {
-		return nil, errInvalidBlockRange
-	}
-
-	// Short-cut if all we care about is pending logs
-	if beginPending && endPending {
-		return f.pendingLogs(), nil
+	// Disallow pending logs.
+	if f.begin == rpc.PendingBlockNumber.Int64() || f.end == rpc.PendingBlockNumber.Int64() {
+		return nil, errPendingLogsUnsupported
 	}
 
 	var err error
@@ -213,29 +203,7 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 			}
 			logs = append(logs, log)
 		case err := <-errChan:
-			if err != nil {
-				// if an error occurs during extraction, we do return the extracted data
-				return logs, err
-			}
-			// Append the pending ones
-			if endPending {
-				pendingLogs := f.pendingLogs()
-				if checkLimit(pendingLogs...) {
-					limitChan <- true
-
-					// Append any logs that are from the last block
-					for _, log := range pendingLogs {
-						if log.BlockNumber <= logs[len(logs)-1].BlockNumber {
-							logs = append(logs, log)
-						} else {
-							break
-						}
-					}
-					return logs, nil
-				}
-				logs = append(logs, pendingLogs...)
-			}
-			return logs, nil
+			return logs, err
 		}
 	}
 }
@@ -394,22 +362,6 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) ([]*typ
 		logs[i] = &logcopy
 	}
 	return logs, nil
-}
-
-// pendingLogs returns the logs matching the filter criteria within the pending block.
-func (f *Filter) pendingLogs() []*types.Log {
-	block, receipts := f.sys.backend.PendingBlockAndReceipts()
-	if block == nil || receipts == nil {
-		return nil
-	}
-	if bloomFilter(block.Bloom(), f.addresses, f.topics) {
-		var unfiltered []*types.Log
-		for _, r := range receipts {
-			unfiltered = append(unfiltered, r.Logs...)
-		}
-		return f.childFilterLogs(unfiltered)
-	}
-	return nil
 }
 
 // includes returns true if the element is present in the list.

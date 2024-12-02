@@ -128,19 +128,9 @@ func (f *TxFilter) Transactions(ctx context.Context) ([]*ethapi.RPCTransaction, 
 		return txs, err
 	}
 
-	var (
-		beginPending = f.begin == rpc.PendingBlockNumber.Int64()
-		endPending   = f.end == rpc.PendingBlockNumber.Int64()
-	)
-
-	// special case for pending logs
-	if beginPending && !endPending {
-		return nil, errInvalidBlockRange
-	}
-
-	// Short-cut if all we care about is pending logs
-	if beginPending && endPending {
-		return f.pendingTransactions()
+	// Disallow pending logs.
+	if f.begin == rpc.PendingBlockNumber.Int64() || f.end == rpc.PendingBlockNumber.Int64() {
+		return nil, errPendingLogsUnsupported
 	}
 
 	var err error
@@ -194,34 +184,7 @@ func (f *TxFilter) Transactions(ctx context.Context) ([]*ethapi.RPCTransaction, 
 			}
 			txs = append(txs, tx)
 		case err := <-errChan:
-			if err != nil {
-				// if an error occurs during extraction, we do return the extracted data
-				return txs, err
-			}
-			// Append the pending ones
-			if endPending {
-				pendingTxs, err := f.pendingTransactions()
-				if err != nil {
-					// if an error occurs during extraction, we do return the extracted data
-					return txs, err
-				}
-				if checkLimit(pendingTxs...) {
-					limitChan <- true
-
-					// Append any txs that are from the last block
-					for _, tx := range pendingTxs {
-						if tx.BlockNumber.ToInt().Uint64() <= txs[len(txs)-1].BlockNumber.ToInt().Uint64() {
-							txs = append(txs, tx)
-						} else {
-							break
-						}
-					}
-
-					return txs, nil
-				}
-				txs = append(txs, pendingTxs...)
-			}
-			return txs, nil
+			return txs, err
 		}
 	}
 }
@@ -350,31 +313,6 @@ func (f *TxFilter) blockTransactions(ctx context.Context, header *types.Header) 
 	bloom := f.sys.backend.GetTxBloom(ctx, header.Hash())
 	if bloomTxFilter(bloom, f.filterAddresses(), f.sigHashes) {
 		return f.checkMatches(ctx, header)
-	}
-	return []*ethapi.RPCTransaction{}, nil
-}
-
-// pendingTransactions returns the transactions matching the filter criteria within the pending block.
-func (f *TxFilter) pendingTransactions() ([]*ethapi.RPCTransaction, error) {
-	block, _ := f.sys.backend.PendingBlockAndReceipts()
-	if block == nil {
-		return []*ethapi.RPCTransaction{}, nil
-	}
-
-	// calculate the tx bloom filter for the pending block
-	signer := types.MakeSigner(f.sys.backend.ChainConfig(), block.Number(), block.Time())
-	bloomBytes, err := types.TransactionsBloom(block.Transactions(), signer)
-	if err != nil {
-		return nil, err
-	}
-
-	if bloomTxFilter(types.BytesToBloom(bloomBytes), f.filterAddresses(), f.sigHashes) {
-		rpcTxs := []*ethapi.RPCTransaction{}
-		for i, tx := range block.Transactions() {
-			rpcTx := ethapi.NewRPCTransaction(tx, block.Header(), uint64(i), f.sys.backend.ChainConfig())
-			rpcTxs = append(rpcTxs, &rpcTx)
-		}
-		return f.childFilterTransactions(rpcTxs), nil
 	}
 	return []*ethapi.RPCTransaction{}, nil
 }
